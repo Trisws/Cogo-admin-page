@@ -15,8 +15,8 @@ import {
   Sun,
   Moon
 } from 'lucide-react';
-import { CityPreset, ThemeMode } from '../types/simulation';
-import { CITY_PRESETS } from '../utils/presets';
+import { CityPreset, ThemeMode } from '../../lib/types/simulation';
+import { CITY_PRESETS } from '../../lib/utils/presets';
 
 interface HeaderProps {
   currentCity: CityPreset;

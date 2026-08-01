@@ -14,7 +14,7 @@ import {
   DriverStatus,
   VehicleType,
   ThemeMode
-} from './types/simulation';
+} from '../lib/types/simulation';
 import { 
   CITY_PRESETS, 
   generateInitialDrivers, 
@@ -24,7 +24,7 @@ import {
   getRandomPlateNumber, 
   getRandomPhoneNumber,
   VEHICLE_CONFIGS 
-} from './utils/presets';
+} from '../lib/utils/presets';
 import { 
   calculateDistanceKm, 
   calculateBearing, 
@@ -32,7 +32,7 @@ import {
   calculateFare, 
   getApproximateAddress, 
   generateRandomLocation 
-} from './utils/geo';
+} from '../lib/utils/geo';
 
 export default function App() {
   // Theme State
@@ -56,14 +56,90 @@ export default function App() {
   };
 
   // Simulation Data State
-  const [drivers, setDrivers] = useState<Driver[]>(() => 
-    generateInitialDrivers(CITY_PRESETS[0].center, 10)
-  );
-  const [users, setUsers] = useState<User[]>(() => 
-    generateInitialUsers(CITY_PRESETS[0].center, 6)
-  );
+  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [logs, setLogs] = useState<SimulationLog[]>([]);
+
+  // Add Log Helper
+  const addLog = useCallback((message: string, level: 'info' | 'success' | 'warning' | 'error' = 'info', type: 'user' | 'driver' | 'trip' | 'system' = 'system') => {
+    const time = new Date().toLocaleTimeString('vi-VN');
+    setLogs((prev) => [
+      { id: `log-${Date.now()}-${Math.random()}`, time, message, level, type },
+      ...prev.slice(0, 99), // keep last 100 logs
+    ]);
+  }, []);
+
+  // Fetch data function
+  const fetchInitialData = useCallback(async () => {
+    try {
+      const [usersRes, vehiclesRes] = await Promise.all([
+        fetch(import.meta.env.VITE_APP_URL ? `${import.meta.env.VITE_APP_URL}/api/users` : '/api/users'),
+        fetch(import.meta.env.VITE_APP_URL ? `${import.meta.env.VITE_APP_URL}/api/vehicles` : '/api/vehicles')
+      ]);
+      
+      if (usersRes.ok) {
+        const usersData = await usersRes.json();
+        const mappedUsers: User[] = usersData.map((u: any) => {
+          let loc = u.location;
+          if (typeof loc === 'string') {
+            try { loc = JSON.parse(loc); } catch(e) {}
+          }
+          return {
+            id: String(u.id_user),
+            name: u.name || `User ${u.id_user}`,
+            phone: u.phone || '',
+            avatar: u.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=u_${u.id_user}`,
+            location: {
+              lat: loc?.lat || loc?.latitude || CITY_PRESETS[0].center[0],
+              lng: loc?.lng || loc?.longitude || CITY_PRESETS[0].center[1],
+            },
+            status: u.driver_id ? 'in_trip' : 'idle',
+            requestedVehicleType: 'any',
+          };
+        });
+        setUsers(mappedUsers);
+        addLog(`Đã tải ${mappedUsers.length} khách hàng từ CSDL`, 'success', 'system');
+      }
+
+      if (vehiclesRes.ok) {
+        const vehiclesData = await vehiclesRes.json();
+        const mappedDrivers: Driver[] = vehiclesData.map((v: any) => {
+          let loc = v.location;
+          if (typeof loc === 'string') {
+            try { loc = JSON.parse(loc); } catch(e) {}
+          }
+          return {
+            id: String(v.driver_id),
+            name: `Tài xế ${v.driver_id}`,
+            phone: '',
+            avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=drv_${v.driver_id}`,
+            location: {
+              lat: loc?.lat || loc?.latitude || CITY_PRESETS[0].center[0],
+              lng: loc?.lng || loc?.longitude || CITY_PRESETS[0].center[1],
+            },
+            vehicleType: 'car_4',
+            plateNumber: `Xe ${v.id_vehicle}`,
+            rating: 5,
+            status: loc?.isOnline ? 'available' : 'offline',
+            speedKmH: 40,
+            heading: 0,
+            totalTrips: 0,
+          };
+        });
+        setDrivers(mappedDrivers);
+        addLog(`Đã tải ${mappedDrivers.length} tài xế từ CSDL`, 'success', 'system');
+      }
+    } catch (error) {
+      console.error('Error fetching initial data:', error);
+      addLog('Lỗi khi tải dữ liệu từ CSDL', 'error', 'system');
+    }
+  }, [addLog]);
+
+  // Fetch initial data from DB
+  useEffect(() => {
+    fetchInitialData();
+  }, [fetchInitialData]);
 
   // Selection & Interactive Controls State
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
@@ -75,15 +151,6 @@ export default function App() {
   const [isSimulating, setIsSimulating] = useState<boolean>(true);
   const [simSpeed, setSimSpeed] = useState<number>(2); // 1x, 2x, 5x, 10x
   const [autoDispatch, setAutoDispatch] = useState<boolean>(true);
-
-  // Add Log Helper
-  const addLog = useCallback((message: string, level: 'info' | 'success' | 'warning' | 'error' = 'info', type: 'user' | 'driver' | 'trip' | 'system' = 'system') => {
-    const time = new Date().toLocaleTimeString('vi-VN');
-    setLogs((prev) => [
-      { id: `log-${Date.now()}-${Math.random()}`, time, message, level, type },
-      ...prev.slice(0, 99), // keep last 100 logs
-    ]);
-  }, []);
 
   // Initial welcome log
   useEffect(() => {
@@ -106,16 +173,24 @@ export default function App() {
 
   // Reset Simulation Data
   const handleResetSimulation = () => {
-    const newDrivers = generateInitialDrivers(currentCity.center, 10);
-    const newUsers = generateInitialUsers(currentCity.center, 6);
-    setDrivers(newDrivers);
-    setUsers(newUsers);
+    fetchInitialData();
     setTrips([]);
     setLogs([]);
     setSelectedDriverId(null);
     setSelectedUserId(null);
     setSelectedTripId(null);
-    addLog('Đã đặt lại toàn bộ dữ liệu giả lập', 'warning', 'system');
+    addLog('Đã đặt lại toàn bộ dữ liệu giả lập từ CSDL', 'warning', 'system');
+  };
+
+  // Clear All Data
+  const handleClearAllData = () => {
+    setDrivers([]);
+    setUsers([]);
+    setTrips([]);
+    setSelectedDriverId(null);
+    setSelectedUserId(null);
+    setSelectedTripId(null);
+    addLog('Đã xóa tất cả dữ liệu hiện tại (Tài xế, Khách hàng, Chuyến đi)', 'error', 'system');
   };
 
   // Seed extra random entities
@@ -476,9 +551,28 @@ export default function App() {
         speedKmH: 40,
       });
       setMapClickMode('none');
-    } else if (mapClickMode === 'set_pickup' || mapClickMode === 'set_dropoff') {
+    } else if (mapClickMode === 'set_pickup') {
+      setMapClickMode('none');
+    } else if (mapClickMode === 'set_dropoff') {
+      if (selectedUserId) {
+        setUsers((prev) => 
+          prev.map((u) => 
+            u.id === selectedUserId ? { ...u, destination: loc } : u
+          )
+        );
+        const user = users.find(u => u.id === selectedUserId);
+        if (user) {
+          addLog(`Đã đặt lại điểm đến cho ${user.name}`, 'success', 'user');
+        }
+      }
       setMapClickMode('none');
     }
+  };
+
+  const handleUserLongPress = (user: User) => {
+    setSelectedUserId(user.id);
+    setMapClickMode('set_dropoff');
+    addLog(`Đang chọn điểm đến mới cho ${user.name}... (Nhấp trên bản đồ)`, 'info', 'system');
   };
 
   return (
@@ -529,6 +623,9 @@ export default function App() {
           onDeleteDriver={handleDeleteDriver}
           onToggleDriverStatus={handleToggleDriverStatus}
           onBatchGenerateDrivers={handleBatchGenerateDrivers}
+          onResetSimulation={handleResetSimulation}
+          onClearAllData={handleClearAllData}
+          onSeedRandom={handleSeedRandom}
           onDispatchTrip={handleDispatchTrip}
           onCancelTrip={handleCancelTrip}
           onForceFinishTrip={handleForceFinishTrip}
@@ -563,6 +660,7 @@ export default function App() {
             addLog(`Đã chuyển tới địa danh: ${loc.address || 'Điểm quan tâm'}`, 'info', 'system');
           }}
           onRequestRideForUser={handleRequestRide}
+          onUserLongPress={handleUserLongPress}
         />
       </div>
     </div>

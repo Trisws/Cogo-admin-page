@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Trip, User, Driver, TripStatus, ThemeMode } from '../../types/simulation';
-import { VEHICLE_CONFIGS } from '../../utils/presets';
-import { formatVND } from '../../utils/geo';
+import { Trip, User, Driver, TripStatus, ThemeMode } from '../../../lib/types/simulation';
+import { VEHICLE_CONFIGS } from '../../../lib/utils/presets';
+import { formatVND } from '../../../lib/utils/geo';
 import { 
   Zap, 
   Car, 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { SimulationLog, ThemeMode } from '../../types/simulation';
+import { SimulationLog, ThemeMode } from '../../../lib/types/simulation';
 import { 
   Activity, 
   Trash2, 

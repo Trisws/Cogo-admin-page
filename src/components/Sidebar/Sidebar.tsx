@@ -12,8 +12,9 @@ import {
 import { UsersTab } from './UsersTab';
 import { DriversTab } from './DriversTab';
 import { TripsTab } from './TripsTab';
+import { MockDataTab } from './MockDataTab';
 import { LogsTab } from './LogsTab';
-import { Driver, User, Trip, MapClickMode, DriverStatus, SimulationLog, ThemeMode } from '../../types/simulation';
+import { Driver, User, Trip, MapClickMode, DriverStatus, SimulationLog, ThemeMode } from '../../../lib/types/simulation';
 
 interface SidebarProps {
   drivers: Driver[];
@@ -34,6 +35,9 @@ interface SidebarProps {
   onDeleteDriver: (driverId: string) => void;
   onToggleDriverStatus: (driverId: string, status: DriverStatus) => void;
   onBatchGenerateDrivers: (count: number) => void;
+  onResetSimulation: () => void;
+  onClearAllData?: () => void;
+  onSeedRandom: () => void;
   onDispatchTrip: (userId: string, driverId: string) => void;
   onCancelTrip: (tripId: string) => void;
   onForceFinishTrip: (tripId: string) => void;
@@ -46,7 +50,7 @@ interface SidebarProps {
   themeMode?: ThemeMode;
 }
 
-type TabType = 'users' | 'drivers' | 'trips' | 'logs';
+type TabType = 'users' | 'drivers' | 'trips' | 'mockdata' | 'logs';
 
 export const Sidebar: React.FC<SidebarProps> = (props) => {
   const [activeTab, setActiveTab] = useState<TabType>('drivers');
@@ -78,7 +82,7 @@ export const Sidebar: React.FC<SidebarProps> = (props) => {
       </button>
 
       {/* Navigation Tabs Header */}
-      <div className={`flex items-center border-b p-1.5 gap-1 ${
+      <div className={`flex items-center border-b p-1.5 gap-1 overflow-x-auto ${
         isLight ? 'bg-slate-100/90 border-slate-200' : 'bg-slate-950 border-slate-800'
       }`}>
         <button
@@ -86,12 +90,12 @@ export const Sidebar: React.FC<SidebarProps> = (props) => {
             setActiveTab('users');
             if (isCollapsed) setIsCollapsed(false);
           }}
-          className={`flex-1 py-2 px-1.5 rounded-xl text-xs font-bold flex flex-col md:flex-row items-center justify-center gap-1.5 transition-all ${
+          className={`flex-1 min-w-[70px] py-2 px-1 rounded-xl text-xs font-bold flex flex-col md:flex-row items-center justify-center gap-1 transition-all ${
             activeTab === 'users'
               ? 'bg-sky-600 text-white shadow-md shadow-sky-600/30'
               : isLight ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
           }`}
-          title="Quản lý Khách hàng"
+          title="Quan sát Khách hàng"
         >
           <div className="relative">
             <Users className="w-4 h-4" />
@@ -101,7 +105,7 @@ export const Sidebar: React.FC<SidebarProps> = (props) => {
           </div>
           {!isCollapsed && (
             <span className="truncate">
-              Người Dùng ({props.users.length})
+              Khách ({props.users.length})
             </span>
           )}
         </button>
@@ -111,12 +115,12 @@ export const Sidebar: React.FC<SidebarProps> = (props) => {
             setActiveTab('drivers');
             if (isCollapsed) setIsCollapsed(false);
           }}
-          className={`flex-1 py-2 px-1.5 rounded-xl text-xs font-bold flex flex-col md:flex-row items-center justify-center gap-1.5 transition-all ${
+          className={`flex-1 min-w-[70px] py-2 px-1 rounded-xl text-xs font-bold flex flex-col md:flex-row items-center justify-center gap-1 transition-all ${
             activeTab === 'drivers'
               ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30'
               : isLight ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
           }`}
-          title="Quản lý Tài xế"
+          title="Quan sát Tài xế"
         >
           <Car className="w-4 h-4" />
           {!isCollapsed && (
@@ -131,7 +135,7 @@ export const Sidebar: React.FC<SidebarProps> = (props) => {
             setActiveTab('trips');
             if (isCollapsed) setIsCollapsed(false);
           }}
-          className={`flex-1 py-2 px-1.5 rounded-xl text-xs font-bold flex flex-col md:flex-row items-center justify-center gap-1.5 transition-all ${
+          className={`flex-1 min-w-[70px] py-2 px-1 rounded-xl text-xs font-bold flex flex-col md:flex-row items-center justify-center gap-1 transition-all ${
             activeTab === 'trips'
               ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/30'
               : isLight ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
@@ -147,6 +151,22 @@ export const Sidebar: React.FC<SidebarProps> = (props) => {
             )}
           </div>
           {!isCollapsed && <span className="truncate">Điều Phối</span>}
+        </button>
+
+        <button
+          onClick={() => {
+            setActiveTab('mockdata');
+            if (isCollapsed) setIsCollapsed(false);
+          }}
+          className={`flex-1 min-w-[70px] py-2 px-1 rounded-xl text-xs font-bold flex flex-col md:flex-row items-center justify-center gap-1 transition-all ${
+            activeTab === 'mockdata'
+              ? 'bg-purple-600 text-white shadow-md shadow-purple-600/30'
+              : isLight ? 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
+          }`}
+          title="Thao tác Tạo / Xóa Dữ liệu Ảo"
+        >
+          <Sparkles className="w-4 h-4 text-purple-400" />
+          {!isCollapsed && <span className="truncate">Dữ Liệu Ảo</span>}
         </button>
 
         <button
@@ -173,13 +193,9 @@ export const Sidebar: React.FC<SidebarProps> = (props) => {
               users={props.users}
               selectedUserId={props.selectedUserId}
               onSelectUser={props.onSelectUser}
-              onAddUser={props.onAddUser}
               onDeleteUser={props.onDeleteUser}
               onRequestRide={props.onRequestRide}
-              onBatchGenerateUsers={props.onBatchGenerateUsers}
-              mapClickMode={props.mapClickMode}
-              setMapClickMode={props.setMapClickMode}
-              mapCenterLocation={props.mapCenterLocation}
+              onNavigateToMockTab={() => setActiveTab('mockdata')}
               themeMode={props.themeMode}
             />
           )}
@@ -189,13 +205,9 @@ export const Sidebar: React.FC<SidebarProps> = (props) => {
               drivers={props.drivers}
               selectedDriverId={props.selectedDriverId}
               onSelectDriver={props.onSelectDriver}
-              onAddDriver={props.onAddDriver}
               onDeleteDriver={props.onDeleteDriver}
               onToggleDriverStatus={props.onToggleDriverStatus}
-              onBatchGenerateDrivers={props.onBatchGenerateDrivers}
-              mapClickMode={props.mapClickMode}
-              setMapClickMode={props.setMapClickMode}
-              mapCenterLocation={props.mapCenterLocation}
+              onNavigateToMockTab={() => setActiveTab('mockdata')}
               themeMode={props.themeMode}
             />
           )}
@@ -212,6 +224,26 @@ export const Sidebar: React.FC<SidebarProps> = (props) => {
               onForceFinishTrip={props.onForceFinishTrip}
               autoDispatch={props.autoDispatch}
               onToggleAutoDispatch={props.onToggleAutoDispatch}
+              themeMode={props.themeMode}
+            />
+          )}
+
+          {activeTab === 'mockdata' && (
+            <MockDataTab
+              drivers={props.drivers}
+              users={props.users}
+              onAddUser={props.onAddUser}
+              onDeleteUser={props.onDeleteUser}
+              onBatchGenerateUsers={props.onBatchGenerateUsers}
+              onAddDriver={props.onAddDriver}
+              onDeleteDriver={props.onDeleteDriver}
+              onBatchGenerateDrivers={props.onBatchGenerateDrivers}
+              onResetSimulation={props.onResetSimulation}
+              onClearAllData={props.onClearAllData}
+              onSeedRandom={props.onSeedRandom}
+              mapClickMode={props.mapClickMode}
+              setMapClickMode={props.setMapClickMode}
+              mapCenterLocation={props.mapCenterLocation}
               themeMode={props.themeMode}
             />
           )}

@@ -9,8 +9,8 @@ import {
   Location,
   CityPreset,
   ThemeMode
-} from '../types/simulation';
-import { VEHICLE_CONFIGS } from '../utils/presets';
+} from '../../lib/types/simulation';
+import { VEHICLE_CONFIGS } from '../../lib/utils/presets';
 import { Layers, Locate, Navigation, Plus, MapPin } from 'lucide-react';
 
 interface LeafletMapProps {
@@ -32,6 +32,7 @@ interface LeafletMapProps {
   currentCity: CityPreset;
   onSelectLandmark: (loc: Location) => void;
   onRequestRideForUser?: (user: User) => void;
+  onUserLongPress?: (user: User) => void;
   themeMode?: ThemeMode;
 }
 
@@ -77,6 +78,7 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
   currentCity,
   onSelectLandmark,
   onRequestRideForUser,
+  onUserLongPress,
   themeMode,
 }) => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -321,21 +323,51 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
         const marker = currentMarkers[user.id];
         marker.setLatLng([user.location.lat, user.location.lng]);
         marker.setIcon(customIcon);
+        
+        // Remove old listeners to prevent stale closures
+        marker.off('click');
+        marker.off('mousedown');
+        marker.off('mouseup');
+        marker.off('mouseout');
       } else {
         const marker = L.marker([user.location.lat, user.location.lng], {
           icon: customIcon,
           title: user.name,
         }).addTo(map);
 
-        marker.on('click', (e) => {
-          L.DomEvent.stopPropagation(e);
-          onSelectUser(user);
-        });
-
         currentMarkers[user.id] = marker;
       }
+      
+      const marker = currentMarkers[user.id];
+      
+      marker.on('click', (e) => {
+        L.DomEvent.stopPropagation(e);
+        onSelectUser(user);
+      });
+      
+      let longPressTimer: NodeJS.Timeout | null = null;
+      
+      marker.on('mousedown', (e) => {
+        L.DomEvent.stopPropagation(e);
+        longPressTimer = setTimeout(() => {
+          longPressTimer = null;
+          if (onUserLongPress) {
+            onUserLongPress(user);
+          }
+        }, 2000); // 2 seconds
+      });
+
+      const clearTimer = () => {
+        if (longPressTimer) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+      };
+
+      marker.on('mouseup', clearTimer);
+      marker.on('mouseout', clearTimer);
     });
-  }, [users, selectedUserId, onSelectUser]);
+  }, [users, selectedUserId, onSelectUser, onUserLongPress]);
 
   // Render Routes and Pickup/Dropoff Markers for active trips
   useEffect(() => {

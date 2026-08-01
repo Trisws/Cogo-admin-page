@@ -91,6 +91,7 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
   const driverMarkersRef = useRef<Record<string, L.Marker>>({});
   const userMarkersRef = useRef<Record<string, L.Marker>>({});
   const tripRoutesGroupRef = useRef<L.LayerGroup | null>(null);
+  const destinationPreviewMarkerRef = useRef<L.Marker | null>(null);
 
   // Initialize Map
   useEffect(() => {
@@ -346,9 +347,40 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
       });
       
       let longPressTimer: NodeJS.Timeout | null = null;
-      
+
+      const showDestinationPin = () => {
+        if (!user.destination || !mapRef.current) return;
+        if (destinationPreviewMarkerRef.current) {
+          destinationPreviewMarkerRef.current.remove();
+        }
+        const destIcon = L.divIcon({
+          className: 'custom-destination-preview-marker',
+          html: `
+            <div class="w-8 h-8 rounded-full bg-rose-600 text-white flex items-center justify-center shadow-lg border-2 border-white animate-bounce">
+              📍
+            </div>
+          `,
+          iconSize: [32, 32],
+          iconAnchor: [16, 32],
+        });
+        destinationPreviewMarkerRef.current = L.marker(
+          [user.destination.lat, user.destination.lng],
+          { icon: destIcon, interactive: false }
+        )
+          .bindTooltip(`Điểm đến: ${user.destination.address || 'Chưa xác định'}`, { direction: 'top', className: 'text-xs font-semibold' })
+          .addTo(mapRef.current);
+      };
+
+      const hideDestinationPin = () => {
+        if (destinationPreviewMarkerRef.current) {
+          destinationPreviewMarkerRef.current.remove();
+          destinationPreviewMarkerRef.current = null;
+        }
+      };
+
       marker.on('mousedown', (e) => {
         L.DomEvent.stopPropagation(e);
+        showDestinationPin();
         longPressTimer = setTimeout(() => {
           longPressTimer = null;
           if (onUserLongPress) {
@@ -362,6 +394,7 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
           clearTimeout(longPressTimer);
           longPressTimer = null;
         }
+        hideDestinationPin();
       };
 
       marker.on('mouseup', clearTimer);

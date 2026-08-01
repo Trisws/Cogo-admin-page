@@ -96,6 +96,13 @@ export default function App() {
             },
             status: u.driver_id ? 'in_trip' : 'idle',
             requestedVehicleType: 'any',
+            destination: u.destination
+              ? {
+                  lat: u.destination.lat,
+                  lng: u.destination.lng,
+                  address: u.destination.address,
+                }
+              : undefined,
           };
         });
         setUsers(mappedUsers);

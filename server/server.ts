@@ -35,7 +35,17 @@ async function startServer() {
 
   app.get('/api/users', async (req, res) => {
     try {
-      const result = await pool.query('SELECT * FROM users');
+      const result = await pool.query(`
+        SELECT u.*, r."Diem_den" AS destination
+        FROM users u
+        LEFT JOIN LATERAL (
+          SELECT "Diem_den"
+          FROM rides
+          WHERE rides.id_user = u.id_user AND rides."Diem_den" IS NOT NULL
+          ORDER BY rides.created_at DESC
+          LIMIT 1
+        ) r ON true
+      `);
       res.json(result.rows);
     } catch (err) {
       console.error('Error fetching users:', err);

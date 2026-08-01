@@ -14,7 +14,7 @@ import { DriversTab } from './DriversTab';
 import { TripsTab } from './TripsTab';
 import { MockDataTab } from './MockDataTab';
 import { LogsTab } from './LogsTab';
-import { Driver, User, Trip, MapClickMode, DriverStatus, SimulationLog, ThemeMode } from '../../../lib/types/simulation';
+import { Driver, User, Trip, MapClickMode, DriverStatus, SimulationLog, ThemeMode } from '../../types/simulation';
 
 interface SidebarProps {
   drivers: Driver[];

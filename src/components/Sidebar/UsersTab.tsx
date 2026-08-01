@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { User, MapClickMode, VehicleType, ThemeMode } from '../../../lib/types/simulation';
-import { VEHICLE_CONFIGS } from '../../../lib/utils/presets';
+import { User, MapClickMode, VehicleType, ThemeMode } from '../../types/simulation';
+import { VEHICLE_CONFIGS } from '../../utils/presets';
 import { 
   Plus, 
   UserPlus, 

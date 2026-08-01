@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Driver, DriverStatus, VehicleType, MapClickMode, ThemeMode } from '../../../lib/types/simulation';
-import { VEHICLE_CONFIGS } from '../../../lib/utils/presets';
+import { Driver, DriverStatus, VehicleType, MapClickMode, ThemeMode } from '../../types/simulation';
+import { VEHICLE_CONFIGS } from '../../utils/presets';
 import { 
   Car, 
   Search, 

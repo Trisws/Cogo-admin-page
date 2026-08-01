@@ -14,7 +14,7 @@ import {
   DriverStatus,
   VehicleType,
   ThemeMode
-} from '../lib/types/simulation';
+} from './types/simulation';
 import { 
   CITY_PRESETS, 
   generateInitialDrivers, 
@@ -24,7 +24,7 @@ import {
   getRandomPlateNumber, 
   getRandomPhoneNumber,
   VEHICLE_CONFIGS 
-} from '../lib/utils/presets';
+} from './utils/presets';
 import { 
   calculateDistanceKm, 
   calculateBearing, 
@@ -32,7 +32,7 @@ import {
   calculateFare, 
   getApproximateAddress, 
   generateRandomLocation 
-} from '../lib/utils/geo';
+} from './utils/geo';
 
 export default function App() {
   // Theme State

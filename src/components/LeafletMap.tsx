@@ -9,8 +9,8 @@ import {
   Location,
   CityPreset,
   ThemeMode
-} from '../../lib/types/simulation';
-import { VEHICLE_CONFIGS } from '../../lib/utils/presets';
+} from '../types/simulation';
+import { VEHICLE_CONFIGS } from '../utils/presets';
 import { Layers, Locate, Navigation, Plus, MapPin } from 'lucide-react';
 
 interface LeafletMapProps {

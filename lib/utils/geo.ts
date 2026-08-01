@@ -76,6 +76,40 @@ export function generateRouteWaypoints(
   return points;
 }
 
+export interface RoadRoute {
+  waypoints: Location[];
+  distanceKm: number;
+  durationSeconds: number;
+}
+
+/**
+ * Fetches a real road-snapped route between two points via the public OSRM API.
+ * Returns null on failure so callers can fall back to generateRouteWaypoints.
+ */
+export async function fetchRoadRoute(start: Location, end: Location): Promise<RoadRoute | null> {
+  try {
+    const url = `https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson`;
+    const response = await fetch(url);
+    const data = await response.json();
+    const route = data.routes?.[0];
+    if (!route) return null;
+
+    // OSRM returns coordinates as [lng, lat]; our Location type uses {lat, lng}
+    const waypoints: Location[] = route.geometry.coordinates.map(
+      ([lng, lat]: [number, number]) => ({ lat, lng })
+    );
+
+    return {
+      waypoints,
+      distanceKm: route.distance / 1000,
+      durationSeconds: route.duration,
+    };
+  } catch (error) {
+    console.error('Error fetching OSRM route:', error);
+    return null;
+  }
+}
+
 /**
  * Generates a random location around a given center point within radius in km
  */

@@ -25,13 +25,14 @@ import {
   getRandomPhoneNumber,
   VEHICLE_CONFIGS 
 } from '../lib/utils/presets';
-import { 
-  calculateDistanceKm, 
-  calculateBearing, 
-  generateRouteWaypoints, 
-  calculateFare, 
-  getApproximateAddress, 
-  generateRandomLocation 
+import {
+  calculateDistanceKm,
+  calculateBearing,
+  generateRouteWaypoints,
+  calculateFare,
+  getApproximateAddress,
+  generateRandomLocation,
+  fetchRoadRoute
 } from '../lib/utils/geo';
 
 export default function App() {
@@ -147,6 +148,11 @@ export default function App() {
   useEffect(() => {
     fetchInitialData();
   }, [fetchInitialData]);
+
+  // Tracks driver/user ids currently mid-dispatch (route fetch in flight) so the
+  // auto-dispatch loop doesn't re-match them again before the trip is created.
+  const pendingDispatchDriverIds = useRef<Set<string>>(new Set());
+  const pendingDispatchUserIds = useRef<Set<string>>(new Set());
 
   // Selection & Interactive Controls State
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
@@ -283,62 +289,82 @@ export default function App() {
   };
 
   // Manual & Auto Dispatch Trip Logic
-  const handleDispatchTrip = useCallback((userId: string, driverId: string) => {
+  const handleDispatchTrip = useCallback(async (userId: string, driverId: string) => {
     const user = users.find((u) => u.id === userId);
     const driver = drivers.find((d) => d.id === driverId);
 
     if (!user || !driver) return;
+    if (pendingDispatchDriverIds.current.has(driverId) || pendingDispatchUserIds.current.has(userId)) return;
 
-    const pickup = user.location;
-    const dropoff = user.destination || generateRandomLocation(pickup, 3);
-    const distanceKm = Number(calculateDistanceKm(pickup, dropoff).toFixed(1));
-    const fareVND = calculateFare(distanceKm, driver.vehicleType);
+    pendingDispatchDriverIds.current.add(driverId);
+    pendingDispatchUserIds.current.add(userId);
 
-    // Build routes
-    const driverToPickupRoute = generateRouteWaypoints(driver.location, pickup, 15);
-    const pickupToDropoffRoute = generateRouteWaypoints(pickup, dropoff, 25);
+    try {
+      const pickup = user.location;
+      const dropoff = user.destination || generateRandomLocation(pickup, 3);
 
-    const newTrip: Trip = {
-      id: `trip-${Date.now()}`,
-      userId: user.id,
-      userName: user.name,
-      userAvatar: user.avatar,
-      driverId: driver.id,
-      driverName: driver.name,
-      driverAvatar: driver.avatar,
-      driverPhone: driver.phone,
-      driverPlate: driver.plateNumber,
-      pickup,
-      dropoff,
-      status: 'driver_en_route',
-      vehicleType: driver.vehicleType,
-      fareVND,
-      distanceKm,
-      createdAt: Date.now(),
-      progress: 0,
-      currentDriverPos: driver.location,
-      driverToPickupRoute,
-      pickupToDropoffRoute,
-      routeIndex: 0,
-      etaSeconds: Math.round((distanceKm / driver.speedKmH) * 3600),
-    };
+      // Fetch real road-snapped routes (OSRM); fall back to synthetic waypoints on failure
+      const [driverToPickupRoad, pickupToDropoffRoad] = await Promise.all([
+        fetchRoadRoute(driver.location, pickup),
+        fetchRoadRoute(pickup, dropoff),
+      ]);
 
-    // Update Driver & User status
-    setDrivers((prev) =>
-      prev.map((d) => (d.id === driver.id ? { ...d, status: 'busy' } : d))
-    );
-    setUsers((prev) =>
-      prev.map((u) => (u.id === user.id ? { ...u, status: 'in_trip' } : u))
-    );
+      const driverToPickupRoute = driverToPickupRoad?.waypoints ?? generateRouteWaypoints(driver.location, pickup, 15);
+      const pickupToDropoffRoute = pickupToDropoffRoad?.waypoints ?? generateRouteWaypoints(pickup, dropoff, 25);
 
-    setTrips((prev) => [newTrip, ...prev]);
-    setSelectedTripId(newTrip.id);
+      const distanceKm = Number(
+        (pickupToDropoffRoad?.distanceKm ?? calculateDistanceKm(pickup, dropoff)).toFixed(1)
+      );
+      const fareVND = calculateFare(distanceKm, driver.vehicleType);
+      const etaSeconds = pickupToDropoffRoad
+        ? Math.round(pickupToDropoffRoad.durationSeconds)
+        : Math.round((distanceKm / driver.speedKmH) * 3600);
 
-    addLog(
-      `Điều phối thành công! Tài xế ${driver.name} nhận chuyến của khách ${user.name}`,
-      'success',
-      'trip'
-    );
+      const newTrip: Trip = {
+        id: `trip-${Date.now()}`,
+        userId: user.id,
+        userName: user.name,
+        userAvatar: user.avatar,
+        driverId: driver.id,
+        driverName: driver.name,
+        driverAvatar: driver.avatar,
+        driverPhone: driver.phone,
+        driverPlate: driver.plateNumber,
+        pickup,
+        dropoff,
+        status: 'driver_en_route',
+        vehicleType: driver.vehicleType,
+        fareVND,
+        distanceKm,
+        createdAt: Date.now(),
+        progress: 0,
+        currentDriverPos: driver.location,
+        driverToPickupRoute,
+        pickupToDropoffRoute,
+        routeIndex: 0,
+        etaSeconds,
+      };
+
+      // Update Driver & User status
+      setDrivers((prev) =>
+        prev.map((d) => (d.id === driver.id ? { ...d, status: 'busy' } : d))
+      );
+      setUsers((prev) =>
+        prev.map((u) => (u.id === user.id ? { ...u, status: 'in_trip' } : u))
+      );
+
+      setTrips((prev) => [newTrip, ...prev]);
+      setSelectedTripId(newTrip.id);
+
+      addLog(
+        `Điều phối thành công! Tài xế ${driver.name} nhận chuyến của khách ${user.name}`,
+        'success',
+        'trip'
+      );
+    } finally {
+      pendingDispatchDriverIds.current.delete(driverId);
+      pendingDispatchUserIds.current.delete(userId);
+    }
   }, [users, drivers, addLog]);
 
   const handleCancelTrip = (tripId: string) => {
@@ -396,8 +422,12 @@ export default function App() {
   useEffect(() => {
     if (!autoDispatch || !isSimulating) return;
 
-    const requestingUsers = users.filter((u) => u.status === 'requesting');
-    const availableDrivers = drivers.filter((d) => d.status === 'available');
+    const requestingUsers = users.filter(
+      (u) => u.status === 'requesting' && !pendingDispatchUserIds.current.has(u.id)
+    );
+    const availableDrivers = drivers.filter(
+      (d) => d.status === 'available' && !pendingDispatchDriverIds.current.has(d.id)
+    );
 
     if (requestingUsers.length === 0 || availableDrivers.length === 0) return;
 

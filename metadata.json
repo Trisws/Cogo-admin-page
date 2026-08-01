@@ -1,0 +1,10 @@
+{
+  "name": "Remix Giả Lập Bản Đồ Leaflet - Tài Xế \u0026 Người Dùng",
+  "description": "Trình giả lập tương tác vị trí người dùng và tài xế trên bản đồ Leaflet thời gian thực với bảng điều khiển mô phỏng chuyến đi và điều phối.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

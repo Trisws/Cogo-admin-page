@@ -40,7 +40,7 @@ export interface User {
   name: string;
   phone: string;
   avatar: string;
-  location: Location;
+  location: Location | null; // null when the DB has no known location for this user
   destination?: Location;
   status: UserStatus;
   requestedVehicleType: VehicleType | 'any';

@@ -163,6 +163,7 @@ export default function App() {
             speedKmH: 40,
             heading: 0,
             totalTrips: 0,
+            isFromDb: true,
           };
         });
         setDrivers(mappedDrivers);
@@ -573,10 +574,11 @@ export default function App() {
         });
       });
 
-      // 2. Idle wandering for available drivers
+      // 2. Idle wandering for available drivers (drivers loaded from the DB
+      // keep their real fixed location and never wander)
       setDrivers((prevDrivers) =>
         prevDrivers.map((d) => {
-          if (d.status !== 'available') return d;
+          if (d.status !== 'available' || d.isFromDb) return d;
 
           // 20% chance per tick to wander slightly
           if (Math.random() > 0.25) return d;

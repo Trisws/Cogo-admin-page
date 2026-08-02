@@ -13,7 +13,8 @@ import {
   Location,
   DriverStatus,
   VehicleType,
-  ThemeMode
+  ThemeMode,
+  CommandSpec
 } from '../lib/types/simulation';
 import { 
   CITY_PRESETS, 
@@ -34,6 +35,25 @@ import {
   generateRandomLocation,
   fetchRoadRoute
 } from '../lib/utils/geo';
+
+const COMMAND_LIST: CommandSpec[] = [
+  { cmd: 'help', usage: 'help', desc: 'danh sách lệnh' },
+  { cmd: 'ls', usage: 'ls drivers|users|trips', desc: 'liệt kê nhanh' },
+  { cmd: 'driver', usage: 'driver <id> on|off', desc: 'bật/tắt tài xế' },
+  { cmd: 'dispatch', usage: 'dispatch <userId> <driverId>', desc: 'ghép chuyến thủ công' },
+  { cmd: 'cancel', usage: 'cancel <tripId>', desc: 'hủy chuyến' },
+  { cmd: 'finish', usage: 'finish <tripId>', desc: 'hoàn thành ngay' },
+  { cmd: 'seed', usage: 'seed [drivers|users] [n]', desc: 'sinh dữ liệu ảo' },
+  { cmd: 'pause', usage: 'pause', desc: 'tạm dừng mô phỏng' },
+  { cmd: 'resume', usage: 'resume', desc: 'chạy mô phỏng' },
+  { cmd: 'speed', usage: 'speed <1|2|5|10>', desc: 'tốc độ mô phỏng' },
+  { cmd: 'theme', usage: 'theme light|dark', desc: 'đổi giao diện' },
+  { cmd: 'city', usage: 'city <cityId>', desc: 'đổi khu vực' },
+  { cmd: 'reset', usage: 'reset', desc: 'nạp lại dữ liệu từ CSDL' },
+  { cmd: 'clear', usage: 'clear [all]', desc: 'xóa màn hình / xóa sạch dữ liệu' },
+];
+
+const HELP_TEXT = COMMAND_LIST.map((c) => `${c.usage.padEnd(30)} - ${c.desc}`).join('\n');
 
 export default function App() {
   // Theme State
@@ -71,15 +91,21 @@ export default function App() {
     ]);
   }, []);
 
+  // Tracks the most recent "should this fetch's result still be applied" request.
+  // Bumped by handleClearAllData so an in-flight fetch from page load/StrictMode
+  // double-invoke can't silently overwrite an explicit clear with stale DB data.
+  const fetchGenerationRef = useRef(0);
+
   // Fetch data function
   const fetchInitialData = useCallback(async () => {
+    const myGeneration = ++fetchGenerationRef.current;
     try {
       const [usersRes, vehiclesRes] = await Promise.all([
         fetch(import.meta.env.VITE_APP_URL ? `${import.meta.env.VITE_APP_URL}/api/users` : '/api/users'),
         fetch(import.meta.env.VITE_APP_URL ? `${import.meta.env.VITE_APP_URL}/api/vehicles` : '/api/vehicles')
       ]);
-      
-      if (usersRes.ok) {
+
+      if (usersRes.ok && fetchGenerationRef.current === myGeneration) {
         const usersData = await usersRes.json();
         const mappedUsers: User[] = usersData.map((u: any) => {
           let loc = u.location;
@@ -110,24 +136,33 @@ export default function App() {
         addLog(`Đã tải ${mappedUsers.length} khách hàng từ CSDL`, 'success', 'system');
       }
 
-      if (vehiclesRes.ok) {
+      if (vehiclesRes.ok && fetchGenerationRef.current === myGeneration) {
         const vehiclesData = await vehiclesRes.json();
         const mappedDrivers: Driver[] = vehiclesData.map((v: any) => {
           let loc = v.location;
           if (typeof loc === 'string') {
             try { loc = JSON.parse(loc); } catch(e) {}
           }
+          const typeStr = (v.type_vehicle || '').toLowerCase();
+          const vehicleType: VehicleType = typeStr.includes('máy') || typeStr.includes('may')
+            ? 'motorbike'
+            : typeStr.includes('tải') || typeStr.includes('giao')
+              ? 'delivery'
+              : typeStr.includes('7')
+                ? 'car_7'
+                : 'car_4';
           return {
-            id: String(v.driver_id),
-            name: `Tài xế ${v.driver_id}`,
+            id: String(v.id_vehicle),
+            name: `Tài xế #${v.id_user}`,
             phone: '',
-            avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=drv_${v.driver_id}`,
+            avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=drv_${v.id_vehicle}`,
             location: {
               lat: loc?.lat || loc?.latitude || CITY_PRESETS[0].center[0],
               lng: loc?.lng || loc?.longitude || CITY_PRESETS[0].center[1],
+              address: loc?.address || undefined,
             },
-            vehicleType: 'car_4',
-            plateNumber: `Xe ${v.id_vehicle}`,
+            vehicleType,
+            plateNumber: v.name_vehicle || `Xe ${v.id_vehicle}`,
             rating: 5,
             status: loc?.isOnline ? 'available' : 'offline',
             speedKmH: 40,
@@ -197,6 +232,7 @@ export default function App() {
 
   // Clear All Data
   const handleClearAllData = () => {
+    fetchGenerationRef.current++; // invalidate any in-flight fetchInitialData so it can't overwrite this clear
     setDrivers([]);
     setUsers([]);
     setTrips([]);
@@ -612,9 +648,172 @@ export default function App() {
     addLog(`Đang chọn điểm đến mới cho ${user.name}... (Nhấp trên bản đồ)`, 'info', 'system');
   };
 
+  // --- Command Bar: parses a typed command and dispatches to the same handlers as the UI ---
+  const findDriver = useCallback(
+    (frag: string) => drivers.find((d) => d.id === frag) || drivers.find((d) => d.id.endsWith(frag)),
+    [drivers]
+  );
+  const findUser = useCallback(
+    (frag: string) => users.find((u) => u.id === frag) || users.find((u) => u.id.endsWith(frag)),
+    [users]
+  );
+  const findTrip = useCallback(
+    (frag: string) => trips.find((t) => t.id === frag) || trips.find((t) => t.id.endsWith(frag)),
+    [trips]
+  );
+
+  const handleRunCommand = useCallback(
+    (raw: string): string => {
+      const parts = raw.trim().split(/\s+/).filter(Boolean);
+      if (parts.length === 0) return '';
+      const [cmd, ...args] = parts;
+      const lower = cmd.toLowerCase();
+
+      const fail = (msg: string) => {
+        addLog(`$ ${raw} → ${msg}`, 'error', 'system');
+        return msg;
+      };
+      const ok = (msg: string) => {
+        addLog(`$ ${raw} → ${msg}`, 'success', 'system');
+        return msg;
+      };
+
+      switch (lower) {
+        case 'help':
+          return HELP_TEXT;
+
+        case 'ls': {
+          const target = args[0]?.toLowerCase();
+          if (target === 'drivers') {
+            return ok(`${drivers.length} tài xế: ${drivers.map((d) => d.id.slice(-6)).join(', ') || '(trống)'}`);
+          }
+          if (target === 'users') {
+            return ok(`${users.length} khách hàng: ${users.map((u) => u.id.slice(-6)).join(', ') || '(trống)'}`);
+          }
+          if (target === 'trips') {
+            return ok(`${trips.length} chuyến: ${trips.map((t) => t.id.slice(-6)).join(', ') || '(trống)'}`);
+          }
+          return fail('dùng: ls drivers|users|trips');
+        }
+
+        case 'driver': {
+          const [idFrag, action] = args;
+          const driver = idFrag ? findDriver(idFrag) : undefined;
+          if (!driver) return fail(`không tìm thấy tài xế "${idFrag ?? ''}"`);
+          if (action !== 'on' && action !== 'off') return fail('dùng: driver <id> on|off');
+          handleToggleDriverStatus(driver.id, action === 'on' ? 'available' : 'offline');
+          return ok(`tài xế ${driver.name} → ${action === 'on' ? 'ONLINE' : 'OFFLINE'}`);
+        }
+
+        case 'dispatch': {
+          const [userFrag, driverFrag] = args;
+          const user = userFrag ? findUser(userFrag) : undefined;
+          const driver = driverFrag ? findDriver(driverFrag) : undefined;
+          if (!user || !driver) return fail('dùng: dispatch <userId> <driverId>');
+          handleDispatchTrip(user.id, driver.id);
+          return ok(`đang ghép ${user.name} với ${driver.name}...`);
+        }
+
+        case 'cancel': {
+          const trip = args[0] ? findTrip(args[0]) : undefined;
+          if (!trip) return fail(`không tìm thấy chuyến "${args[0] ?? ''}"`);
+          handleCancelTrip(trip.id);
+          return ok(`đã hủy chuyến #${trip.id.slice(-6)}`);
+        }
+
+        case 'finish': {
+          const trip = args[0] ? findTrip(args[0]) : undefined;
+          if (!trip) return fail(`không tìm thấy chuyến "${args[0] ?? ''}"`);
+          handleForceFinishTrip(trip.id);
+          return ok(`đã hoàn thành chuyến #${trip.id.slice(-6)}`);
+        }
+
+        case 'seed': {
+          const kind = args[0]?.toLowerCase();
+          const count = Number(args[1]) || 5;
+          if (!kind) {
+            handleSeedRandom();
+            return ok('đã sinh thêm dữ liệu ngẫu nhiên quanh bản đồ');
+          }
+          if (kind === 'drivers') {
+            handleBatchGenerateDrivers(count);
+            return ok(`đã sinh ${count} tài xế mới`);
+          }
+          if (kind === 'users') {
+            handleBatchGenerateUsers(count);
+            return ok(`đã sinh ${count} khách hàng mới`);
+          }
+          return fail('dùng: seed [drivers|users] [n]');
+        }
+
+        case 'pause':
+          setIsSimulating(false);
+          return ok('đã tạm dừng mô phỏng');
+
+        case 'resume':
+          setIsSimulating(true);
+          return ok('đã chạy mô phỏng');
+
+        case 'speed': {
+          const spd = Number(args[0]);
+          if (![1, 2, 5, 10].includes(spd)) return fail('dùng: speed <1|2|5|10>');
+          setSimSpeed(spd);
+          return ok(`tốc độ mô phỏng: ${spd}x`);
+        }
+
+        case 'theme': {
+          const mode = args[0]?.toLowerCase();
+          if (mode !== 'light' && mode !== 'dark') return fail('dùng: theme light|dark');
+          setThemeMode(mode);
+          return ok(`giao diện: ${mode}`);
+        }
+
+        case 'city': {
+          const city = CITY_PRESETS.find((c) => c.id === args[0]);
+          if (!city) return fail(`không tìm thấy khu vực "${args[0] ?? ''}". Có: ${CITY_PRESETS.map((c) => c.id).join(', ')}`);
+          handleSelectCity(city);
+          return ok(`đã chuyển tới ${city.name}`);
+        }
+
+        case 'reset':
+          handleResetSimulation();
+          return ok('đã nạp lại dữ liệu từ CSDL');
+
+        case 'clear':
+          if (args[0] === 'all') {
+            handleClearAllData();
+            return ok('đã xóa sạch toàn bộ dữ liệu hiện tại');
+          }
+          return '__CLEAR__';
+
+        default:
+          return fail(`lệnh không hợp lệ: "${cmd}". Gõ "help" để xem danh sách lệnh.`);
+      }
+    },
+    [
+      drivers,
+      users,
+      trips,
+      findDriver,
+      findUser,
+      findTrip,
+      addLog,
+      handleToggleDriverStatus,
+      handleDispatchTrip,
+      handleCancelTrip,
+      handleForceFinishTrip,
+      handleSeedRandom,
+      handleBatchGenerateDrivers,
+      handleBatchGenerateUsers,
+      handleResetSimulation,
+      handleClearAllData,
+      handleSelectCity,
+    ]
+  );
+
   return (
-    <div className={`flex flex-col h-screen w-screen overflow-hidden font-sans select-none ${
-      themeMode === 'light' ? 'theme-light bg-slate-100 text-slate-800' : 'theme-dark bg-slate-950 text-slate-100'
+    <div className={`flex flex-col h-screen w-screen overflow-hidden select-none ${
+      themeMode === 'light' ? 'theme-light bg-zinc-50 text-zinc-900' : 'theme-dark bg-zinc-950 text-zinc-100'
     }`}>
       {/* Top Header Controls Bar */}
       <Header
@@ -639,8 +838,28 @@ export default function App() {
         onToggleTheme={handleToggleTheme}
       />
 
-      {/* Main Container: Sidebar + Leaflet Map */}
+      {/* Main Container: Leaflet Map + Panel */}
       <div className="flex-1 flex overflow-hidden relative">
+        <LeafletMap
+          center={currentCity.center}
+          zoom={currentCity.zoom}
+          drivers={drivers}
+          users={users}
+          trips={trips}
+          selectedDriverId={selectedDriverId}
+          selectedUserId={selectedUserId}
+          selectedTripId={selectedTripId}
+          onSelectDriver={(d) => setSelectedDriverId(d ? d.id : null)}
+          onSelectUser={(u) => setSelectedUserId(u ? u.id : null)}
+          onSelectTrip={(t) => setSelectedTripId(t ? t.id : null)}
+          mapClickMode={mapClickMode}
+          onMapClickAction={handleMapClickAction}
+          tileLayerType={tileLayerType}
+          onChangeTileLayer={setTileLayerType}
+          onRequestRideForUser={handleRequestRide}
+          onUserLongPress={handleUserLongPress}
+        />
+
         <Sidebar
           drivers={drivers}
           users={users}
@@ -673,31 +892,8 @@ export default function App() {
           setMapClickMode={setMapClickMode}
           mapCenterLocation={{ lat: currentCity.center[0], lng: currentCity.center[1] }}
           themeMode={themeMode}
-        />
-
-        <LeafletMap
-          center={currentCity.center}
-          zoom={currentCity.zoom}
-          drivers={drivers}
-          users={users}
-          trips={trips}
-          selectedDriverId={selectedDriverId}
-          selectedUserId={selectedUserId}
-          selectedTripId={selectedTripId}
-          onSelectDriver={(d) => setSelectedDriverId(d ? d.id : null)}
-          onSelectUser={(u) => setSelectedUserId(u ? u.id : null)}
-          onSelectTrip={(t) => setSelectedTripId(t ? t.id : null)}
-          mapClickMode={mapClickMode}
-          onMapClickAction={handleMapClickAction}
-          tileLayerType={tileLayerType}
-          onChangeTileLayer={setTileLayerType}
-          currentCity={currentCity}
-          onSelectLandmark={(loc) => {
-            // Center map or create user at landmark
-            addLog(`Đã chuyển tới địa danh: ${loc.address || 'Điểm quan tâm'}`, 'info', 'system');
-          }}
-          onRequestRideForUser={handleRequestRide}
-          onUserLongPress={handleUserLongPress}
+          onRunCommand={handleRunCommand}
+          commands={COMMAND_LIST}
         />
       </div>
     </div>

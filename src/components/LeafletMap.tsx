@@ -4,14 +4,13 @@ import {
   Driver, 
   User, 
   Trip, 
-  MapClickMode, 
-  TileLayerType, 
+  MapClickMode,
+  TileLayerType,
   Location,
-  CityPreset,
   ThemeMode
 } from '../../lib/types/simulation';
 import { VEHICLE_CONFIGS } from '../../lib/utils/presets';
-import { Layers, Locate, Navigation, Plus, MapPin } from 'lucide-react';
+import { Locate, Navigation, Plus, MapPin } from 'lucide-react';
 
 interface LeafletMapProps {
   center: [number, number];
@@ -29,8 +28,6 @@ interface LeafletMapProps {
   onMapClickAction: (location: Location) => void;
   tileLayerType: TileLayerType;
   onChangeTileLayer: (layer: TileLayerType) => void;
-  currentCity: CityPreset;
-  onSelectLandmark: (loc: Location) => void;
   onRequestRideForUser?: (user: User) => void;
   onUserLongPress?: (user: User) => void;
   themeMode?: ThemeMode;
@@ -75,8 +72,6 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
   onMapClickAction,
   tileLayerType,
   onChangeTileLayer,
-  currentCity,
-  onSelectLandmark,
   onRequestRideForUser,
   onUserLongPress,
   themeMode,
@@ -399,6 +394,35 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
 
       marker.on('mouseup', clearTimer);
       marker.on('mouseout', clearTimer);
+
+      // Native touch listeners: mouse events above don't reliably fire during a
+      // sustained touch-and-hold on real mobile devices, so long-press needs its own binding.
+      const el = marker.getElement();
+      if (el) {
+        const markerWithTouch = marker as L.Marker & { _touchLongPressHandlers?: { start: (ev: TouchEvent) => void; end: () => void } };
+        const prevHandlers = markerWithTouch._touchLongPressHandlers;
+        if (prevHandlers) {
+          el.removeEventListener('touchstart', prevHandlers.start);
+          el.removeEventListener('touchend', prevHandlers.end);
+          el.removeEventListener('touchcancel', prevHandlers.end);
+        }
+
+        const handleTouchStart = (ev: TouchEvent) => {
+          ev.stopPropagation();
+          showDestinationPin();
+          longPressTimer = setTimeout(() => {
+            longPressTimer = null;
+            if (onUserLongPress) {
+              onUserLongPress(user);
+            }
+          }, 2000);
+        };
+
+        el.addEventListener('touchstart', handleTouchStart, { passive: true });
+        el.addEventListener('touchend', clearTimer, { passive: true });
+        el.addEventListener('touchcancel', clearTimer, { passive: true });
+        markerWithTouch._touchLongPressHandlers = { start: handleTouchStart, end: clearTimer };
+      }
     });
   }, [users, selectedUserId, onSelectUser, onUserLongPress]);
 
@@ -495,40 +519,6 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
         </div>
       )}
 
-      {/* Floating Layer Switcher & Landmark Quick Jump Bar */}
-      <div className="absolute bottom-6 left-4 z-[400] flex flex-col gap-2">
-        {/* Tile Layer Selector */}
-        <div className={`${isLight ? 'bg-white/90 border-slate-200 shadow-md' : 'bg-slate-900/90 border-slate-700/80 shadow-xl'} border backdrop-blur-md rounded-xl p-1.5 flex items-center gap-1`}>
-          <Layers className={`w-4 h-4 ml-1 mr-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`} />
-          {(Object.keys(TILE_LAYERS) as TileLayerType[]).map((type) => (
-            <button
-              key={type}
-              onClick={() => onChangeTileLayer(type)}
-              className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-all ${
-                tileLayerType === type
-                  ? 'bg-emerald-500 text-white shadow-sm'
-                  : isLight ? 'text-slate-600 hover:bg-slate-100' : 'text-slate-300 hover:bg-slate-800'
-              }`}
-            >
-              {TILE_LAYERS[type].name.split(' ')[0]}
-            </button>
-          ))}
-        </div>
-
-        {/* City Landmarks Shortcuts */}
-        <div className={`hidden sm:flex items-center gap-1.5 overflow-x-auto max-w-md ${isLight ? 'bg-white/90 border-slate-200 shadow-md' : 'bg-slate-900/80 border-slate-800 shadow-lg'} border backdrop-blur-md rounded-xl p-1.5`}>
-          <span className={`text-[10px] uppercase font-bold px-1 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Địa danh:</span>
-          {currentCity.landmarks.map((lm, idx) => (
-            <button
-              key={idx}
-              onClick={() => onSelectLandmark(lm.location)}
-              className={`text-xs px-2 py-0.5 rounded-lg border whitespace-nowrap transition-colors font-semibold ${isLight ? 'bg-slate-100 hover:bg-slate-200 text-slate-800 border-slate-200' : 'bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700'}`}
-            >
-              📍 {lm.name}
-            </button>
-          ))}
-        </div>
-      </div>
     </div>
   );
 };

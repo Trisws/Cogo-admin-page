@@ -134,6 +134,8 @@ export default function App() {
         });
         setUsers(mappedUsers);
         addLog(`Đã tải ${mappedUsers.length} khách hàng từ CSDL`, 'success', 'system');
+      } else if (!usersRes.ok && fetchGenerationRef.current === myGeneration) {
+        addLog(`Lỗi tải khách hàng từ CSDL (HTTP ${usersRes.status}) — kiểm tra cấu hình kết nối database`, 'error', 'system');
       }
 
       if (vehiclesRes.ok && fetchGenerationRef.current === myGeneration) {
@@ -172,6 +174,8 @@ export default function App() {
         });
         setDrivers(mappedDrivers);
         addLog(`Đã tải ${mappedDrivers.length} tài xế từ CSDL`, 'success', 'system');
+      } else if (!vehiclesRes.ok && fetchGenerationRef.current === myGeneration) {
+        addLog(`Lỗi tải tài xế từ CSDL (HTTP ${vehiclesRes.status}) — kiểm tra cấu hình kết nối database`, 'error', 'system');
       }
     } catch (error) {
       console.error('Error fetching initial data:', error);

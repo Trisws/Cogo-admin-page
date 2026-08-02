@@ -1,16 +1,10 @@
-export type VehicleType = 'motorbike' | 'car_4' | 'car_7' | 'delivery';
+export type VehicleType = 'motorbike' | 'car_4' | 'car_7';
 
-export type DriverStatus = 'available' | 'busy' | 'offline';
+// idle: rảnh, chưa làm gì. driving: đang là tài xế của 1 chuyến đi họ tự tạo.
+// riding: đang là hành khách ngồi trong 1 chuyến đi (dành cho tính năng "Tìm chuyến đi" sau này).
+export type UserStatus = 'idle' | 'driving' | 'riding';
 
-export type UserStatus = 'idle' | 'requesting' | 'in_trip' | 'completed';
-
-export type TripStatus = 
-  | 'searching' 
-  | 'driver_assigned' 
-  | 'driver_en_route' 
-  | 'in_progress' 
-  | 'completed' 
-  | 'cancelled';
+export type TripStatus = 'in_progress' | 'completed' | 'cancelled';
 
 export interface Location {
   lat: number;
@@ -18,66 +12,46 @@ export interface Location {
   address?: string;
 }
 
-export interface Driver {
-  id: string;
-  name: string;
-  phone: string;
-  avatar: string;
-  location: Location;
-  vehicleType: VehicleType;
-  plateNumber: string;
-  rating: number;
-  status: DriverStatus;
-  speedKmH: number;
-  heading: number; // 0 to 360 degrees
-  totalTrips: number;
-  targetLocation?: Location; // for wandering or navigating
-  isFromDb?: boolean; // true for drivers loaded from the database — their location is fixed, not randomized
-}
-
 export interface User {
   id: string;
   name: string;
   phone: string;
   avatar: string;
-  location: Location | null; // null when the DB has no known location for this user
-  destination?: Location;
+  location: Location;
   status: UserStatus;
-  requestedVehicleType: VehicleType | 'any';
-  note?: string;
+  heading?: number; // 0 to 360 degrees, set while driving a trip
+}
+
+// A single seat in a trip. passengerUserId is null while the seat is empty.
+export interface TripSlot {
+  passengerUserId: string | null;
 }
 
 export interface Trip {
   id: string;
-  userId: string;
-  userName: string;
-  userAvatar: string;
-  driverId?: string;
-  driverName?: string;
-  driverAvatar?: string;
-  driverPhone?: string;
-  driverPlate?: string;
-  pickup: Location;
-  dropoff: Location;
-  status: TripStatus;
+  driverUserId: string;
+  driverName: string;
+  driverAvatar: string;
+  driverPhone: string;
   vehicleType: VehicleType;
-  fareVND: number;
-  distanceKm: number;
-  createdAt: number; // timestamp
-  progress: number; // 0 to 100 percentage of active leg
-  currentDriverPos?: Location;
-  pickupToDropoffRoute: Location[];
-  driverToPickupRoute?: Location[];
+  slots: TripSlot[]; // length = passenger capacity for this vehicle type
+  pickup: Location; // the driver's own location at trip creation time
+  destination: Location;
+  status: TripStatus;
+  routeWaypoints: Location[];
   routeIndex: number;
+  progress: number; // 0 to 100
+  distanceKm: number;
+  fareVND: number;
   etaSeconds: number;
+  createdAt: number; // timestamp
 }
 
-export type MapClickMode = 
-  | 'none' 
-  | 'add_user' 
-  | 'add_driver' 
-  | 'set_pickup' 
-  | 'set_dropoff';
+export type MapClickMode =
+  | 'none'
+  | 'pick_random_center'
+  | 'pick_trip_destination'
+  | 'pick_demo_center';
 
 export type TileLayerType = 'osm' | 'positron' | 'dark' | 'satellite';
 
@@ -95,7 +69,7 @@ export interface CityPreset {
 export interface SimulationLog {
   id: string;
   time: string;
-  type: 'user' | 'driver' | 'trip' | 'system';
+  type: 'user' | 'trip' | 'system';
   message: string;
   level?: 'info' | 'success' | 'warning' | 'error';
 }
@@ -104,11 +78,4 @@ export interface CommandSpec {
   cmd: string;
   usage: string;
   desc: string;
-}
-
-export interface FilterOptions {
-  driverStatus: 'all' | DriverStatus;
-  userStatus: 'all' | UserStatus;
-  vehicleType: 'all' | VehicleType;
-  searchQuery: string;
 }

@@ -192,10 +192,6 @@ export function calculateFare(distanceKm: number, vehicleType: string): number {
       baseFare = 25000;
       perKmRate = 16000;
       break;
-    case 'delivery':
-      baseFare = 30000;
-      perKmRate = 12000;
-      break;
     default:
       baseFare = 15000;
       perKmRate = 8000;

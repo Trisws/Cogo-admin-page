@@ -1,14 +1,16 @@
-import React, { useState } from 'react';
-import { User, VehicleType, MapClickMode, ThemeMode } from '../../../lib/types/simulation';
+import React, { useEffect, useState } from 'react';
+import { User, VehicleType, MapClickMode, ThemeMode, Location } from '../../../lib/types/simulation';
+import { VEHICLE_CONFIGS } from '../../../lib/utils/presets';
 import {
   Search,
   Trash2,
   Zap,
+  Compass,
   Phone,
   Plus,
   Sparkles,
   MapPin,
-  Navigation
+  Car
 } from 'lucide-react';
 
 interface UsersTabProps {
@@ -16,12 +18,13 @@ interface UsersTabProps {
   selectedUserId: string | null;
   onSelectUser: (user: User | null) => void;
   onDeleteUser: (userId: string) => void;
-  onRequestRide: (user: User) => void;
-  onAddUser: (user: Omit<User, 'id' | 'status'>) => void;
+  onAddUser: (user: { name: string; phone: string; location: Location }) => void;
   onBatchGenerateUsers: (count: number) => void;
+  onStartCreateTrip: (userId: string, vehicleType: VehicleType) => void;
+  onFindTrip: (user: User) => void;
   mapClickMode: MapClickMode;
   setMapClickMode: (mode: MapClickMode) => void;
-  mapCenterLocation: { lat: number; lng: number };
+  pendingRandomLocation: Location | null;
   themeMode?: ThemeMode;
 }
 
@@ -30,12 +33,13 @@ export const UsersTab: React.FC<UsersTabProps> = ({
   selectedUserId,
   onSelectUser,
   onDeleteUser,
-  onRequestRide,
   onAddUser,
   onBatchGenerateUsers,
+  onStartCreateTrip,
+  onFindTrip,
   mapClickMode,
   setMapClickMode,
-  mapCenterLocation,
+  pendingRandomLocation,
   themeMode,
 }) => {
   const [search, setSearch] = useState('');
@@ -44,11 +48,18 @@ export const UsersTab: React.FC<UsersTabProps> = ({
 
   const [userName, setUserName] = useState('');
   const [userPhone, setUserPhone] = useState('0901234567');
-  const [pickupLat, setPickupLat] = useState<string>(mapCenterLocation.lat.toFixed(6));
-  const [pickupLng, setPickupLng] = useState<string>(mapCenterLocation.lng.toFixed(6));
-  const [destLat, setDestLat] = useState<string>((mapCenterLocation.lat + 0.012).toFixed(6));
-  const [destLng, setDestLng] = useState<string>((mapCenterLocation.lng + 0.015).toFixed(6));
-  const [requestedVehicle, setRequestedVehicle] = useState<VehicleType | 'any'>('any');
+  const [pickedLocation, setPickedLocation] = useState<Location | null>(null);
+
+  const [tripDraftUserId, setTripDraftUserId] = useState<string | null>(null);
+  const [tripVehicleType, setTripVehicleType] = useState<VehicleType>('motorbike');
+
+  // Pick up the random location chosen via the map pin-drop, if the form is the one waiting for it
+  useEffect(() => {
+    if (pendingRandomLocation) {
+      setPickedLocation(pendingRandomLocation);
+      setFormOpen(true);
+    }
+  }, [pendingRandomLocation]);
 
   const isLight = themeMode === 'light';
   const border = isLight ? 'border-zinc-200' : 'border-zinc-800';
@@ -69,17 +80,21 @@ export const UsersTab: React.FC<UsersTabProps> = ({
 
   const handleSubmitUser = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userName.trim()) return;
-    onAddUser({
-      name: userName,
-      phone: userPhone,
-      avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=u_${Date.now()}`,
-      location: { lat: parseFloat(pickupLat) || mapCenterLocation.lat, lng: parseFloat(pickupLng) || mapCenterLocation.lng },
-      destination: { lat: parseFloat(destLat) || mapCenterLocation.lat + 0.01, lng: parseFloat(destLng) || mapCenterLocation.lng + 0.01 },
-      requestedVehicleType: requestedVehicle,
-    });
+    if (!userName.trim() || !pickedLocation) return;
+    onAddUser({ name: userName, phone: userPhone, location: pickedLocation });
     setUserName('');
+    setPickedLocation(null);
     setFormOpen(false);
+  };
+
+  const handleOpenTripDraft = (userId: string) => {
+    setTripDraftUserId((prev) => (prev === userId ? null : userId));
+    setTripVehicleType('motorbike');
+  };
+
+  const handlePickTripDestination = (userId: string) => {
+    onStartCreateTrip(userId, tripVehicleType);
+    setTripDraftUserId(null);
   };
 
   return (
@@ -109,35 +124,32 @@ export const UsersTab: React.FC<UsersTabProps> = ({
             <input type="text" placeholder="Tên khách hàng" value={userName} onChange={(e) => setUserName(e.target.value)} required className={inputCls} />
             <input type="text" placeholder="Số điện thoại" value={userPhone} onChange={(e) => setUserPhone(e.target.value)} className={inputCls} />
           </div>
-          <select value={requestedVehicle} onChange={(e) => setRequestedVehicle(e.target.value as VehicleType | 'any')} className={inputCls}>
-            <option value="any">Bất kỳ phương tiện</option>
-            <option value="motorbike">🛵 Xe máy</option>
-            <option value="car_4">🚗 Ô tô 4 chỗ</option>
-            <option value="car_7">🚘 Ô tô 7 chỗ</option>
-          </select>
-          <div className="flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => setMapClickMode(mapClickMode === 'set_pickup' ? 'none' : 'set_pickup')}
-              className={`text-[11px] px-2 py-1 rounded-md flex items-center gap-1 cursor-pointer ${
-                mapClickMode === 'set_pickup' ? 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-300' : outlineBtn
-              }`}
-            >
-              <MapPin className="w-3 h-3" /> điểm đón
-            </button>
-            <button
-              type="button"
-              onClick={() => setMapClickMode(mapClickMode === 'set_dropoff' ? 'none' : 'set_dropoff')}
-              className={`text-[11px] px-2 py-1 rounded-md flex items-center gap-1 cursor-pointer ${
-                mapClickMode === 'set_dropoff' ? 'bg-rose-100 text-rose-800 ring-1 ring-rose-300' : outlineBtn
-              }`}
-            >
-              <Navigation className="w-3 h-3" /> điểm đến
-            </button>
-          </div>
-          <button type="submit" className={`w-full py-1.5 rounded-md text-xs font-medium cursor-pointer ${
-            isLight ? 'bg-zinc-900 text-white hover:bg-zinc-700' : 'bg-zinc-100 text-zinc-900 hover:bg-white'
-          }`}>
+
+          <button
+            type="button"
+            onClick={() => setMapClickMode(mapClickMode === 'pick_random_center' ? 'none' : 'pick_random_center')}
+            className={`text-xs px-2.5 py-1.5 rounded-md flex items-center justify-center gap-1.5 cursor-pointer ${
+              mapClickMode === 'pick_random_center' ? 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-300' : outlineBtn
+            }`}
+          >
+            <Compass className="w-3.5 h-3.5" />
+            {pickedLocation ? 'Đã chọn vị trí — bấm để chọn lại' : 'Ghim tâm vùng, random vị trí trong bán kính 5km'}
+          </button>
+
+          {pickedLocation && (
+            <div className={`text-[11px] flex items-center gap-1.5 ${dim}`}>
+              <MapPin className="w-3 h-3 shrink-0" />
+              <span className="truncate">{pickedLocation.address || `${pickedLocation.lat}, ${pickedLocation.lng}`}</span>
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={!userName.trim() || !pickedLocation}
+            className={`w-full py-1.5 rounded-md text-xs font-medium cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+              isLight ? 'bg-zinc-900 text-white hover:bg-zinc-700' : 'bg-zinc-100 text-zinc-900 hover:bg-white'
+            }`}
+          >
             Tạo khách hàng
           </button>
         </form>
@@ -165,9 +177,9 @@ export const UsersTab: React.FC<UsersTabProps> = ({
           }`}
         >
           <option value="all">Tất cả</option>
-          <option value="idle">Chờ</option>
-          <option value="requesting">Đang tìm xe</option>
-          <option value="in_trip">Đang đi</option>
+          <option value="idle">Rảnh</option>
+          <option value="driving">Đang lái</option>
+          <option value="riding">Đang đi</option>
         </select>
       </div>
 
@@ -178,8 +190,9 @@ export const UsersTab: React.FC<UsersTabProps> = ({
         ) : (
           filteredUsers.map((user) => {
             const isSelected = user.id === selectedUserId;
-            const isRequesting = user.status === 'requesting';
-            const isInTrip = user.status === 'in_trip';
+            const isDriving = user.status === 'driving';
+            const isRiding = user.status === 'riding';
+            const isDraftOpen = tripDraftUserId === user.id;
 
             return (
               <div
@@ -208,15 +221,15 @@ export const UsersTab: React.FC<UsersTabProps> = ({
                     <div>
                       <h4 className={`font-semibold text-xs flex items-center gap-1.5 ${isLight ? 'text-zinc-900' : 'text-zinc-100'}`}>
                         {user.name}
-                        {isInTrip && (
+                        {isDriving && (
+                          <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ring-1 ${
+                            isLight ? 'bg-amber-100 text-amber-800 ring-amber-300' : 'bg-amber-500/15 text-amber-300 ring-amber-500/30'
+                          }`}>Đang lái</span>
+                        )}
+                        {isRiding && (
                           <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ring-1 ${
                             isLight ? 'bg-emerald-100 text-emerald-800 ring-emerald-300' : 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/30'
                           }`}>Đang đi</span>
-                        )}
-                        {isRequesting && (
-                          <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ring-1 animate-pulse ${
-                            isLight ? 'bg-rose-100 text-rose-800 ring-rose-300' : 'bg-rose-500/15 text-rose-300 ring-rose-500/30'
-                          }`}>Tìm xe</span>
                         )}
                       </h4>
                       <div className={`flex items-center gap-2 text-[10px] mt-0.5 ${dim}`}>
@@ -235,29 +248,53 @@ export const UsersTab: React.FC<UsersTabProps> = ({
                 </div>
 
                 <div className={`mt-2 text-[11px] rounded-md p-2 space-y-1 ${isLight ? 'bg-zinc-50' : 'bg-zinc-950'}`}>
-                  <div className={`flex items-center gap-1.5 font-medium truncate ${user.location ? 'text-emerald-600' : dim}`}>
+                  <div className="flex items-center gap-1.5 text-emerald-600 font-medium truncate">
                     <span>●</span>
-                    <span className="truncate">
-                      Đón: {user.location ? (user.location.address || `${user.location.lat}, ${user.location.lng}`) : 'Vị trí chưa xác định'}
-                    </span>
+                    <span className="truncate">Vị trí: {user.location.address || `${user.location.lat}, ${user.location.lng}`}</span>
                   </div>
-                  {user.destination && (
-                    <div className="flex items-center gap-1.5 text-rose-500 font-medium truncate">
-                      <span>●</span>
-                      <span className="truncate">Đến: {user.destination.address || `${user.destination.lat}, ${user.destination.lng}`}</span>
-                    </div>
-                  )}
                 </div>
 
-                {user.status === 'idle' && user.location && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onRequestRide(user); }}
-                    className={`mt-2.5 w-full py-1.5 rounded-md font-medium text-xs flex items-center justify-center gap-1.5 cursor-pointer ${
-                      isLight ? 'bg-zinc-900 text-white hover:bg-zinc-700' : 'bg-zinc-100 text-zinc-900 hover:bg-white'
-                    }`}
-                  >
-                    <Zap className="w-3.5 h-3.5" /> Đặt chuyến ngay
-                  </button>
+                {user.status === 'idle' && (
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <div className="mt-2.5 grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => handleOpenTripDraft(user.id)}
+                        className={`py-1.5 rounded-md font-medium text-xs flex items-center justify-center gap-1.5 cursor-pointer ${
+                          isDraftOpen ? 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-300' : outlineBtn
+                        }`}
+                      >
+                        <Car className="w-3.5 h-3.5" /> Tạo chuyến đi
+                      </button>
+                      <button
+                        onClick={() => onFindTrip(user)}
+                        className={`py-1.5 rounded-md font-medium text-xs flex items-center justify-center gap-1.5 cursor-pointer ${outlineBtn}`}
+                      >
+                        <Zap className="w-3.5 h-3.5" /> Tìm chuyến đi
+                      </button>
+                    </div>
+
+                    {isDraftOpen && (
+                      <div className={`mt-2 p-2 rounded-md border flex flex-col gap-2 ${border} ${isLight ? 'bg-zinc-50' : 'bg-zinc-950'}`}>
+                        <select
+                          value={tripVehicleType}
+                          onChange={(e) => setTripVehicleType(e.target.value as VehicleType)}
+                          className={inputCls}
+                        >
+                          {Object.entries(VEHICLE_CONFIGS).map(([key, config]) => (
+                            <option key={key} value={key}>{config.icon} {config.name}</option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={() => handlePickTripDestination(user.id)}
+                          className={`py-1.5 rounded-md font-medium text-xs flex items-center justify-center gap-1.5 cursor-pointer ${
+                            isLight ? 'bg-zinc-900 text-white hover:bg-zinc-700' : 'bg-zinc-100 text-zinc-900 hover:bg-white'
+                          }`}
+                        >
+                          <MapPin className="w-3.5 h-3.5" /> Chọn điểm đến trên bản đồ
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             );

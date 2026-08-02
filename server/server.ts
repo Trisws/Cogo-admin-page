@@ -55,7 +55,11 @@ async function startServer() {
 
   app.get('/api/vehicles', async (req, res) => {
     try {
-      const result = await pool.query('SELECT * FROM vehicles');
+      const result = await pool.query(`
+        SELECT v.*, u.name AS driver_name
+        FROM vehicles v
+        LEFT JOIN users u ON u.id_user = v.id_user
+      `);
       res.json(result.rows);
     } catch (err) {
       console.error('Error fetching vehicles:', err);

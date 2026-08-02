@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Play,
   Pause,
@@ -9,10 +9,12 @@ import {
   Sun,
   Moon,
   Map,
-  Satellite
+  Satellite,
+  Search,
+  Loader2
 } from 'lucide-react';
 import { CityPreset, ThemeMode } from '../../lib/types/simulation';
-import { CITY_PRESETS } from '../../lib/utils/presets';
+import { geocodeAddress } from '../../lib/utils/geo';
 
 interface HeaderProps {
   currentCity: CityPreset;
@@ -59,6 +61,36 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const isLight = themeMode === 'light';
 
+  const [searchQuery, setSearchQuery] = useState(currentCity.name);
+  const [isSearching, setIsSearching] = useState(false);
+
+  React.useEffect(() => {
+    setSearchQuery(currentCity.name);
+  }, [currentCity.id]);
+
+  const handleSearchLocation = async () => {
+    const query = searchQuery.trim();
+    if (!query || isSearching) return;
+
+    setIsSearching(true);
+    try {
+      const result = await geocodeAddress(query);
+      if (result) {
+        onSelectCity({
+          id: `search-${Date.now()}`,
+          name: result.displayName,
+          country: 'Việt Nam',
+          center: [result.lat, result.lng],
+          zoom: 14,
+          landmarks: [],
+        });
+        setSearchQuery(result.displayName);
+      }
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
   const outlineBtn = isLight
     ? 'bg-white text-zinc-700 ring-1 ring-zinc-300 hover:bg-zinc-50'
     : 'bg-zinc-900 text-zinc-200 ring-1 ring-zinc-700 hover:bg-zinc-800';
@@ -81,26 +113,34 @@ export const Header: React.FC<HeaderProps> = ({
           </p>
         </div>
 
-        <div className={`hidden md:flex items-center rounded-md px-2 text-xs ring-1 ${
+        <div className={`hidden md:flex items-center gap-1 rounded-md px-2 text-xs ring-1 w-64 ${
           isLight ? 'ring-zinc-300 bg-white' : 'ring-zinc-700 bg-zinc-900'
         }`}>
-          <MapPin className={`w-3.5 h-3.5 mr-1 ${isLight ? 'text-zinc-400' : 'text-zinc-500'}`} />
-          <select
-            value={currentCity.id}
-            onChange={(e) => {
-              const found = CITY_PRESETS.find((c) => c.id === e.target.value);
-              if (found) onSelectCity(found);
+          <MapPin className={`w-3.5 h-3.5 shrink-0 ${isLight ? 'text-zinc-400' : 'text-zinc-500'}`} />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleSearchLocation();
             }}
-            className={`bg-transparent text-xs font-medium focus:outline-none cursor-pointer py-1.5 ${
-              isLight ? 'text-zinc-800' : 'text-zinc-200'
+            onFocus={(e) => e.target.select()}
+            placeholder="Tìm vị trí, địa chỉ..."
+            className={`min-w-0 flex-1 bg-transparent text-xs font-medium focus:outline-none py-1.5 ${
+              isLight ? 'text-zinc-800 placeholder:text-zinc-400' : 'text-zinc-200 placeholder:text-zinc-600'
             }`}
+          />
+          <button
+            onClick={handleSearchLocation}
+            disabled={isSearching || !searchQuery.trim()}
+            className={`shrink-0 p-1 rounded cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 ${
+              isLight ? 'text-zinc-500 hover:text-zinc-900' : 'text-zinc-500 hover:text-zinc-200'
+            }`}
+            title="Tìm vị trí"
+            aria-label="Tìm vị trí"
           >
-            {CITY_PRESETS.map((city) => (
-              <option key={city.id} value={city.id} className={isLight ? 'bg-white text-zinc-800' : 'bg-zinc-900 text-zinc-200'}>
-                {city.name}
-              </option>
-            ))}
-          </select>
+            {isSearching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+          </button>
         </div>
       </div>
 

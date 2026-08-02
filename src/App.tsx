@@ -61,19 +61,12 @@ export default function App() {
 
   // City & Viewport State
   const [currentCity, setCurrentCity] = useState<CityPreset>(CITY_PRESETS[0]);
-  const [tileLayerType, setTileLayerType] = useState<TileLayerType>('positron');
+  const [tileLayerType, setTileLayerType] = useState<TileLayerType>('osm');
 
-  // Toggle Theme logic
+  // Toggle Theme logic (only affects UI chrome, not the map tile layer —
+  // the tile layer is controlled solely by the Bản/Vệ buttons)
   const handleToggleTheme = () => {
-    setThemeMode((prev) => {
-      const nextTheme = prev === 'light' ? 'dark' : 'light';
-      if (nextTheme === 'light' && tileLayerType === 'dark') {
-        setTileLayerType('positron');
-      } else if (nextTheme === 'dark' && (tileLayerType === 'positron' || tileLayerType === 'osm')) {
-        setTileLayerType('dark');
-      }
-      return nextTheme;
-    });
+    setThemeMode((prev) => (prev === 'light' ? 'dark' : 'light'));
   };
 
   // Simulation Data State
@@ -155,7 +148,7 @@ export default function App() {
                 : 'car_4';
           return {
             id: String(v.id_vehicle),
-            name: `Tài xế #${v.id_user}`,
+            name: v.driver_name || `Tài xế #${v.id_user}`,
             phone: '',
             avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=drv_${v.id_vehicle}`,
             location: {
@@ -221,6 +214,13 @@ export default function App() {
     setSelectedUserId(null);
     setSelectedTripId(null);
     addLog(`Đã chuyển khu vực đến: ${city.name}`, 'info', 'system');
+  };
+
+  // Pan the map to a searched location without touching existing driver/user data
+  // (their coordinates come from the DB and must stay fixed, not be randomized)
+  const handleSearchLocation = (city: CityPreset) => {
+    setCurrentCity(city);
+    addLog(`Đã di chuyển bản đồ đến: ${city.name}`, 'info', 'system');
   };
 
   // Reset Simulation Data
@@ -822,7 +822,7 @@ export default function App() {
       {/* Top Header Controls Bar */}
       <Header
         currentCity={currentCity}
-        onSelectCity={handleSelectCity}
+        onSelectCity={handleSearchLocation}
         isSimulating={isSimulating}
         onToggleSimulate={() => setIsSimulating(!isSimulating)}
         simSpeed={simSpeed}

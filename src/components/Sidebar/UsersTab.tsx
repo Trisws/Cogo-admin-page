@@ -145,7 +145,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
 
       {/* Filter and Search Bar */}
       <div className="flex items-center gap-2">
-        <div className="relative flex-1">
+        <div className="relative flex-1 min-w-0">
           <Search className={`w-3.5 h-3.5 absolute left-2.5 top-2.5 ${dim}`} />
           <input
             type="text"
@@ -157,7 +157,13 @@ export const UsersTab: React.FC<UsersTabProps> = ({
             }`}
           />
         </div>
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className={inputCls}>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className={`shrink-0 w-28 rounded-md px-2 py-1.5 text-xs focus:outline-none ring-1 ${
+            isLight ? 'bg-white text-zinc-800 ring-zinc-300 focus:ring-zinc-500' : 'bg-zinc-950 text-zinc-100 ring-zinc-700 focus:ring-zinc-500'
+          }`}
+        >
           <option value="all">Tất cả</option>
           <option value="idle">Chờ</option>
           <option value="requesting">Đang tìm xe</option>

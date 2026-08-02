@@ -7,7 +7,7 @@ interface LogsTabProps {
   onClearLogs: () => void;
   totalTripsCount: number;
   completedTripsCount: number;
-  activeDriversCount: number;
+  activeTripsCount: number;
   activeUsersCount: number;
   themeMode?: ThemeMode;
 }
@@ -17,7 +17,7 @@ export const LogsTab: React.FC<LogsTabProps> = ({
   onClearLogs,
   totalTripsCount,
   completedTripsCount,
-  activeDriversCount,
+  activeTripsCount,
   activeUsersCount,
   themeMode,
 }) => {
@@ -42,8 +42,8 @@ export const LogsTab: React.FC<LogsTabProps> = ({
           <div className={`text-[10px] font-medium flex items-center gap-1 ${dim}`}>
             <Car className="w-3 h-3" /> Mật độ hệ thống
           </div>
-          <div className="text-lg font-semibold mt-0.5 text-sky-600">{activeDriversCount + activeUsersCount}</div>
-          <div className={`text-[10px] ${dim}`}>{activeDriversCount} xe • {activeUsersCount} khách</div>
+          <div className="text-lg font-semibold mt-0.5 text-sky-600">{activeTripsCount + activeUsersCount}</div>
+          <div className={`text-[10px] ${dim}`}>{activeTripsCount} chuyến đang chạy • {activeUsersCount} khách</div>
         </div>
       </div>
 

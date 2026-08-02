@@ -1,70 +1,39 @@
-import React, { useState } from 'react';
-import { Trip, User, Driver, ThemeMode } from '../../../lib/types/simulation';
+import React from 'react';
+import { Trip, ThemeMode } from '../../../lib/types/simulation';
 import { VEHICLE_CONFIGS } from '../../../lib/utils/presets';
 import { formatVND } from '../../../lib/utils/geo';
 import {
-  Zap,
-  Car,
   MapPin,
   CheckCircle2,
-  Sparkles,
-  Navigation
+  Navigation,
+  User as UserIcon
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 interface TripsTabProps {
   trips: Trip[];
-  users: User[];
-  drivers: Driver[];
   selectedTripId: string | null;
   onSelectTrip: (trip: Trip | null) => void;
-  onDispatchTrip: (userId: string, driverId: string) => void;
   onCancelTrip: (tripId: string) => void;
   onForceFinishTrip: (tripId: string) => void;
-  autoDispatch: boolean;
-  onToggleAutoDispatch: () => void;
   themeMode?: ThemeMode;
 }
 
 export const TripsTab: React.FC<TripsTabProps> = ({
   trips,
-  users,
-  drivers,
   selectedTripId,
   onSelectTrip,
-  onDispatchTrip,
   onCancelTrip,
   onForceFinishTrip,
-  autoDispatch,
-  onToggleAutoDispatch,
   themeMode,
 }) => {
-  const [selectedUserIdForDispatch, setSelectedUserIdForDispatch] = useState<string>('');
-  const [selectedDriverIdForDispatch, setSelectedDriverIdForDispatch] = useState<string>('');
-
   const isLight = themeMode === 'light';
   const border = isLight ? 'border-zinc-200' : 'border-zinc-800';
   const dim = isLight ? 'text-zinc-500' : 'text-zinc-400';
   const cardBg = isLight ? 'bg-white' : 'bg-zinc-900';
-  const inputCls = `w-full rounded-md px-2.5 py-1.5 text-xs focus:outline-none ring-1 ${
-    isLight ? 'bg-white text-zinc-800 ring-zinc-300 focus:ring-zinc-500' : 'bg-zinc-950 text-zinc-100 ring-zinc-700 focus:ring-zinc-500'
-  }`;
-  const outlineBtn = isLight
-    ? 'bg-white text-zinc-700 ring-1 ring-zinc-300 hover:bg-zinc-50'
-    : 'bg-zinc-900 text-zinc-200 ring-1 ring-zinc-700 hover:bg-zinc-800';
 
-  const requestingUsers = users.filter((u) => u.status === 'requesting' || u.status === 'idle');
-  const availableDrivers = drivers.filter((d) => d.status === 'available');
-  const activeTrips = trips.filter((t) => t.status !== 'completed' && t.status !== 'cancelled');
+  const activeTrips = trips.filter((t) => t.status === 'in_progress');
   const completedTrips = trips.filter((t) => t.status === 'completed');
-
-  const handleManualDispatchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedUserIdForDispatch || !selectedDriverIdForDispatch) return;
-    onDispatchTrip(selectedUserIdForDispatch, selectedDriverIdForDispatch);
-    setSelectedUserIdForDispatch('');
-    setSelectedDriverIdForDispatch('');
-  };
 
   const handleFinish = (tripId: string) => {
     onForceFinishTrip(tripId);
@@ -77,53 +46,6 @@ export const TripsTab: React.FC<TripsTabProps> = ({
 
   return (
     <div className="flex flex-col gap-3">
-      {/* Auto Dispatch Banner */}
-      <div className={`rounded-lg border p-2.5 flex items-center justify-between gap-2 ${border} ${cardBg}`}>
-        <div className="flex items-center gap-2">
-          <Sparkles className={`w-4 h-4 ${autoDispatch ? 'text-emerald-500' : dim}`} />
-          <div>
-            <div className={`text-xs font-semibold ${isLight ? 'text-zinc-900' : 'text-zinc-100'}`}>
-              Tự động: {autoDispatch ? 'Bật' : 'Tắt'}
-            </div>
-            <div className={`text-[10px] ${dim}`}>
-              {autoDispatch ? 'Tự ghép khách với tài xế gần nhất' : 'Ghép chuyến thủ công bên dưới'}
-            </div>
-          </div>
-        </div>
-        <button onClick={onToggleAutoDispatch} className={`px-2.5 py-1 rounded-md text-xs font-medium cursor-pointer ${outlineBtn}`}>
-          {autoDispatch ? 'Tắt' : 'Bật'}
-        </button>
-      </div>
-
-      {/* Manual Dispatch Form */}
-      <form onSubmit={handleManualDispatchSubmit} className={`rounded-lg border p-3 flex flex-col gap-2 ${border} ${isLight ? 'bg-zinc-50' : 'bg-zinc-950'}`}>
-        <h3 className={`text-xs font-semibold flex items-center gap-1.5 ${isLight ? 'text-zinc-900' : 'text-zinc-100'}`}>
-          <Zap className="w-4 h-4" /> Ghép chuyến thủ công
-        </h3>
-        <select value={selectedUserIdForDispatch} onChange={(e) => setSelectedUserIdForDispatch(e.target.value)} className={inputCls}>
-          <option value="">-- Chọn khách hàng --</option>
-          {requestingUsers.map((u) => (
-            <option key={u.id} value={u.id}>{u.name} ({u.status === 'requesting' ? 'đang tìm xe' : 'rảnh'})</option>
-          ))}
-        </select>
-        <select value={selectedDriverIdForDispatch} onChange={(e) => setSelectedDriverIdForDispatch(e.target.value)} className={inputCls}>
-          <option value="">-- Chọn tài xế --</option>
-          {availableDrivers.map((d) => {
-            const vConfig = VEHICLE_CONFIGS[d.vehicleType];
-            return <option key={d.id} value={d.id}>{vConfig.icon} {d.name} ({d.plateNumber})</option>;
-          })}
-        </select>
-        <button
-          type="submit"
-          disabled={!selectedUserIdForDispatch || !selectedDriverIdForDispatch}
-          className={`mt-1 w-full py-1.5 rounded-md text-xs font-medium cursor-pointer disabled:opacity-40 ${
-            isLight ? 'bg-zinc-900 text-white hover:bg-zinc-700' : 'bg-zinc-100 text-zinc-900 hover:bg-white'
-          }`}
-        >
-          Tạo &amp; ghép chuyến ngay
-        </button>
-      </form>
-
       {/* Active Trips */}
       <div className="space-y-2">
         <h4 className={`text-xs font-semibold ${dim}`}>Đang chạy ({activeTrips.length})</h4>
@@ -133,13 +55,8 @@ export const TripsTab: React.FC<TripsTabProps> = ({
         ) : (
           activeTrips.map((trip) => {
             const isSelected = trip.id === selectedTripId;
-            const isEnRoute = trip.status === 'driver_en_route';
-            const isInProgress = trip.status === 'in_progress';
-
-            let statusLabel = 'Đang tìm xe';
-            let badge = isLight ? 'bg-sky-100 text-sky-800 ring-sky-300' : 'bg-sky-500/15 text-sky-300 ring-sky-500/30';
-            if (isEnRoute) { statusLabel = 'Đang đón khách'; badge = isLight ? 'bg-amber-100 text-amber-800 ring-amber-300' : 'bg-amber-500/15 text-amber-300 ring-amber-500/30'; }
-            else if (isInProgress) { statusLabel = 'Đang chở đi'; badge = isLight ? 'bg-emerald-100 text-emerald-800 ring-emerald-300' : 'bg-emerald-500/15 text-emerald-300 ring-emerald-500/30'; }
+            const vConfig = VEHICLE_CONFIGS[trip.vehicleType];
+            const filledSlots = trip.slots.filter((s) => s.passengerUserId).length;
 
             return (
               <div
@@ -165,26 +82,37 @@ export const TripsTab: React.FC<TripsTabProps> = ({
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <span className={`font-semibold text-xs ${isLight ? 'text-zinc-900' : 'text-zinc-100'}`}>#{trip.id.slice(-6)}</span>
-                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ${badge}`}>{statusLabel}</span>
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ring-1 ${
+                      isLight ? 'bg-amber-100 text-amber-800 ring-amber-300' : 'bg-amber-500/15 text-amber-300 ring-amber-500/30'
+                    }`}>Đang chạy</span>
                   </div>
                   <span className="font-semibold text-xs text-emerald-600">{formatVND(trip.fareVND)}</span>
                 </div>
 
-                <div className="mt-2.5 grid grid-cols-2 gap-2 text-xs">
-                  <div className={`flex items-center gap-2 p-2 rounded-md ${isLight ? 'bg-zinc-50' : 'bg-zinc-950'}`}>
-                    <img src={trip.userAvatar} alt="" className="w-6 h-6 rounded-full" />
-                    <div className="truncate">
-                      <span className={`text-[10px] block leading-none ${dim}`}>Khách</span>
-                      <span className="font-medium truncate block">{trip.userName}</span>
-                    </div>
+                <div className={`mt-2.5 flex items-center gap-2 p-2 rounded-md text-xs ${isLight ? 'bg-zinc-50' : 'bg-zinc-950'}`}>
+                  <img src={trip.driverAvatar} alt="" className="w-6 h-6 rounded-full" />
+                  <div className="truncate flex-1">
+                    <span className={`text-[10px] block leading-none ${dim}`}>Tài xế · {vConfig.icon} {vConfig.name}</span>
+                    <span className="font-medium truncate block">{trip.driverName}</span>
                   </div>
-                  <div className={`flex items-center gap-2 p-2 rounded-md ${isLight ? 'bg-zinc-50' : 'bg-zinc-950'}`}>
-                    {trip.driverAvatar ? <img src={trip.driverAvatar} alt="" className="w-6 h-6 rounded-full" /> : <Car className={`w-5 h-5 ${dim}`} />}
-                    <div className="truncate">
-                      <span className={`text-[10px] block leading-none ${dim}`}>Tài xế</span>
-                      <span className="font-medium truncate block">{trip.driverName || 'Chưa gán'}</span>
+                </div>
+
+                {/* Passenger slots */}
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {trip.slots.map((slot, i) => (
+                    <div
+                      key={i}
+                      title={slot.passengerUserId ? 'Đã có khách' : 'Còn trống'}
+                      className={`w-7 h-7 rounded-full flex items-center justify-center ring-1 ${
+                        slot.passengerUserId
+                          ? isLight ? 'bg-emerald-100 ring-emerald-300 text-emerald-700' : 'bg-emerald-500/15 ring-emerald-500/30 text-emerald-300'
+                          : isLight ? 'bg-zinc-100 ring-zinc-300 text-zinc-400 border-dashed' : 'bg-zinc-800 ring-zinc-700 text-zinc-600'
+                      }`}
+                    >
+                      <UserIcon className="w-3.5 h-3.5" />
                     </div>
-                  </div>
+                  ))}
+                  <span className={`text-[10px] self-center ml-1 ${dim}`}>{filledSlots}/{trip.slots.length} khách</span>
                 </div>
 
                 <div className="mt-2 text-[11px] space-y-1">
@@ -194,7 +122,7 @@ export const TripsTab: React.FC<TripsTabProps> = ({
                   </div>
                   <div className="flex items-center gap-1.5 text-rose-500 font-medium truncate">
                     <Navigation className="w-3 h-3 shrink-0" />
-                    <span className="truncate">Đến: {trip.dropoff.address || 'điểm đến'}</span>
+                    <span className="truncate">Đến: {trip.destination.address || 'điểm đến'}</span>
                   </div>
                 </div>
 
@@ -241,7 +169,7 @@ export const TripsTab: React.FC<TripsTabProps> = ({
                   <div>
                     <div className={`font-medium flex items-center gap-1.5 ${isLight ? 'text-zinc-800' : 'text-zinc-200'}`}>
                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                      {ct.userName} → {ct.driverName}
+                      {ct.driverName} · {VEHICLE_CONFIGS[ct.vehicleType].icon}
                     </div>
                     <div className={`text-[10px] ${dim}`}>{ct.distanceKm.toFixed(1)} km</div>
                   </div>

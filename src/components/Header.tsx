@@ -25,10 +25,6 @@ interface HeaderProps {
   onChangeSpeed: (speed: number) => void;
   onReset: () => void;
   onSeedRandom: () => void;
-  autoDispatch: boolean;
-  onToggleAutoDispatch: () => void;
-  totalDrivers: number;
-  availableDrivers: number;
   totalUsers: number;
   activeTrips: number;
   completedTrips: number;
@@ -47,10 +43,6 @@ export const Header: React.FC<HeaderProps> = ({
   onChangeSpeed,
   onReset,
   onSeedRandom,
-  autoDispatch,
-  onToggleAutoDispatch,
-  totalDrivers,
-  availableDrivers,
   totalUsers,
   activeTrips,
   completedTrips,
@@ -109,7 +101,7 @@ export const Header: React.FC<HeaderProps> = ({
             CoGo Mô phỏng
           </h1>
           <p className={`text-xs truncate ${isLight ? 'text-zinc-500' : 'text-zinc-400'}`}>
-            {totalDrivers} tài xế ({availableDrivers} sẵn sàng) · {totalUsers} khách · {activeTrips} đang chạy · {completedTrips} hoàn thành
+            {totalUsers} khách hàng · {activeTrips} chuyến đang chạy · {completedTrips} hoàn thành
           </p>
         </div>
 
@@ -153,22 +145,6 @@ export const Header: React.FC<HeaderProps> = ({
           aria-label={isLight ? 'Chuyển chế độ tối' : 'Chuyển chế độ sáng'}
         >
           {isLight ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-        </button>
-
-        <button
-          onClick={onToggleAutoDispatch}
-          className={`rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer ${
-            autoDispatch
-              ? isLight
-                ? 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-300'
-                : 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30'
-              : outlineBtn
-          }`}
-          title="Tự động ghép chuyến"
-          aria-label="Tự động ghép chuyến"
-        >
-          <Sparkles className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">Tự ghép</span>
         </button>
 
         <button

@@ -32,6 +32,7 @@ export interface Driver {
   heading: number; // 0 to 360 degrees
   totalTrips: number;
   targetLocation?: Location; // for wandering or navigating
+  isFromDb?: boolean; // true for drivers loaded from the database — their location is fixed, not randomized
 }
 
 export interface User {

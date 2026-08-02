@@ -110,6 +110,40 @@ export async function fetchRoadRoute(start: Location, end: Location): Promise<Ro
   }
 }
 
+export interface GeocodeResult {
+  lat: number;
+  lng: number;
+  displayName: string;
+}
+
+/**
+ * Looks up a place name/address via the public Nominatim (OSM) geocoding API.
+ * Returns null if nothing is found or the request fails.
+ */
+export async function geocodeAddress(query: string): Promise<GeocodeResult | null> {
+  const trimmed = query.trim();
+  if (!trimmed) return null;
+
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(trimmed)}`;
+    const response = await fetch(url, {
+      headers: { 'Accept-Language': 'vi' },
+    });
+    const results = await response.json();
+    const first = results?.[0];
+    if (!first) return null;
+
+    return {
+      lat: parseFloat(first.lat),
+      lng: parseFloat(first.lon),
+      displayName: first.display_name,
+    };
+  } catch (error) {
+    console.error('Error geocoding address:', error);
+    return null;
+  }
+}
+
 /**
  * Generates a random location around a given center point within radius in km
  */

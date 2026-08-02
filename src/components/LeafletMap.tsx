@@ -271,9 +271,10 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
 
     const map = mapRef.current;
     const currentMarkers = userMarkersRef.current;
-    const activeUserIds = new Set(users.map((u) => u.id));
+    // Users with no known location (not yet in DB) have nothing to plot — skip them
+    const activeUserIds = new Set(users.filter((u) => u.location).map((u) => u.id));
 
-    // Remove deleted user markers
+    // Remove deleted user markers (including ones whose location just became unknown)
     Object.keys(currentMarkers).forEach((id) => {
       if (!activeUserIds.has(id)) {
         currentMarkers[id].remove();
@@ -282,6 +283,8 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
     });
 
     users.forEach((user) => {
+      if (!user.location) return;
+
       const isSelected = user.id === selectedUserId;
       const isRequesting = user.status === 'requesting';
       const isInTrip = user.status === 'in_trip';

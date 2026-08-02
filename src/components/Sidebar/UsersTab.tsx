@@ -235,9 +235,11 @@ export const UsersTab: React.FC<UsersTabProps> = ({
                 </div>
 
                 <div className={`mt-2 text-[11px] rounded-md p-2 space-y-1 ${isLight ? 'bg-zinc-50' : 'bg-zinc-950'}`}>
-                  <div className="flex items-center gap-1.5 text-emerald-600 font-medium truncate">
+                  <div className={`flex items-center gap-1.5 font-medium truncate ${user.location ? 'text-emerald-600' : dim}`}>
                     <span>●</span>
-                    <span className="truncate">Đón: {user.location.address || `${user.location.lat}, ${user.location.lng}`}</span>
+                    <span className="truncate">
+                      Đón: {user.location ? (user.location.address || `${user.location.lat}, ${user.location.lng}`) : 'Vị trí chưa xác định'}
+                    </span>
                   </div>
                   {user.destination && (
                     <div className="flex items-center gap-1.5 text-rose-500 font-medium truncate">
@@ -247,7 +249,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
                   )}
                 </div>
 
-                {user.status === 'idle' && (
+                {user.status === 'idle' && user.location && (
                   <button
                     onClick={(e) => { e.stopPropagation(); onRequestRide(user); }}
                     className={`mt-2.5 w-full py-1.5 rounded-md font-medium text-xs flex items-center justify-center gap-1.5 cursor-pointer ${

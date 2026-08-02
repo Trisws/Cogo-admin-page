@@ -98,22 +98,32 @@ export default function App() {
         fetch(import.meta.env.VITE_APP_URL ? `${import.meta.env.VITE_APP_URL}/api/vehicles` : '/api/vehicles')
       ]);
 
+      // vehicles.id_user is a subset of users.id_user — a user who owns a vehicle
+      // IS that driver, so they must be excluded from the customer list below.
+      const driverIdUsers = new Set<string>();
+      if (vehiclesRes.ok) {
+        const peek = await vehiclesRes.clone().json();
+        peek.forEach((v: any) => driverIdUsers.add(String(v.id_user)));
+      }
+
       if (usersRes.ok && fetchGenerationRef.current === myGeneration) {
         const usersData = await usersRes.json();
-        const mappedUsers: User[] = usersData.map((u: any) => {
+        const mappedUsers: User[] = usersData
+          .filter((u: any) => !driverIdUsers.has(String(u.id_user)))
+          .map((u: any) => {
           let loc = u.location;
           if (typeof loc === 'string') {
             try { loc = JSON.parse(loc); } catch(e) {}
           }
+          const lat = loc?.lat ?? loc?.latitude;
+          const lng = loc?.lng ?? loc?.longitude;
+          const hasLocation = typeof lat === 'number' && typeof lng === 'number';
           return {
             id: String(u.id_user),
             name: u.name || `User ${u.id_user}`,
             phone: u.phone || '',
             avatar: u.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=u_${u.id_user}`,
-            location: {
-              lat: loc?.lat || loc?.latitude || CITY_PRESETS[0].center[0],
-              lng: loc?.lng || loc?.longitude || CITY_PRESETS[0].center[1],
-            },
+            location: hasLocation ? { lat, lng } : null,
             status: u.driver_id ? 'in_trip' : 'idle',
             requestedVehicleType: 'any',
             destination: u.destination
@@ -334,7 +344,7 @@ export default function App() {
     const user = users.find((u) => u.id === userId);
     const driver = drivers.find((d) => d.id === driverId);
 
-    if (!user || !driver) return;
+    if (!user || !driver || !user.location) return;
     if (pendingDispatchDriverIds.current.has(driverId) || pendingDispatchUserIds.current.has(userId)) return;
 
     pendingDispatchDriverIds.current.add(driverId);
@@ -477,6 +487,8 @@ export default function App() {
       let closestDriver: Driver | null = null;
       let minDistance = Infinity;
 
+      if (!user.location) return;
+
       availableDrivers.forEach((driver) => {
         // Match vehicle preference if specified
         if (
@@ -486,7 +498,7 @@ export default function App() {
           return;
         }
 
-        const dist = calculateDistanceKm(user.location, driver.location);
+        const dist = calculateDistanceKm(user.location as Location, driver.location);
         if (dist < minDistance) {
           minDistance = dist;
           closestDriver = driver;

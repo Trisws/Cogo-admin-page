@@ -99,6 +99,12 @@ export interface SimulationLog {
   level?: 'info' | 'success' | 'warning' | 'error';
 }
 
+export interface CommandSpec {
+  cmd: string;
+  usage: string;
+  desc: string;
+}
+
 export interface FilterOptions {
   driverStatus: 'all' | DriverStatus;
   userStatus: 'all' | UserStatus;

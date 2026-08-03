@@ -181,17 +181,29 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
     const currentMarkers = userMarkersRef.current;
     const activeUserIds = new Set(users.map((u) => u.id));
 
-    // Remove deleted user markers
+    // Passengers who have already boarded a vehicle are hidden until they're
+    // dropped off at their destination waypoint (they're inside the car).
+    const onboardPassengerIds = new Set(
+      trips
+        .filter((t) => t.status === 'in_progress')
+        .flatMap((t) => t.slots)
+        .filter((s) => s.passengerUserId && s.pickedUp)
+        .map((s) => s.passengerUserId as string)
+    );
+
+    // Remove deleted or currently-onboard user markers
     Object.keys(currentMarkers).forEach((id) => {
-      if (!activeUserIds.has(id)) {
+      if (!activeUserIds.has(id) || onboardPassengerIds.has(id)) {
         currentMarkers[id].remove();
         delete currentMarkers[id];
       }
     });
 
     users.forEach((user) => {
+      if (onboardPassengerIds.has(user.id)) return;
       const isSelected = user.id === selectedUserId;
       const isDriving = user.status === 'driving';
+      const isSearching = user.status === 'searching';
       const isRiding = user.status === 'riding';
 
       const drivingTrip = isDriving
@@ -201,6 +213,7 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
 
       let badgeBg = 'bg-sky-500';
       if (isDriving) badgeBg = 'bg-amber-500';
+      if (isSearching) badgeBg = 'bg-violet-500';
       if (isRiding) badgeBg = 'bg-emerald-500';
 
       const iconHtml = `
@@ -217,7 +230,7 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
           <div class="absolute -top-7 left-1/2 transform -translate-x-1/2 ${isLight ? 'bg-sky-50 text-sky-900 border-sky-200' : 'bg-sky-950/95 text-sky-100 border-sky-700'} text-[10px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap shadow-md pointer-events-none ${
             isSelected ? 'block z-40' : 'hidden group-hover:block'
           }">
-            ${user.name} ${isDriving ? '• Đang lái' : ''}
+            ${user.name} ${isDriving ? '• Đang lái' : ''}${isSearching ? '• Đang tìm chuyến' : ''}
           </div>
         </div>
       `;
@@ -319,6 +332,7 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
             {mapClickMode === 'pick_random_center' && 'Nhấp vào bản đồ để GHIM TÂM VÙNG (random vị trí trong bán kính 5km)'}
             {mapClickMode === 'pick_trip_destination' && 'Nhấp vào bản đồ để CHỌN ĐIỂM ĐẾN cho chuyến đi'}
             {mapClickMode === 'pick_demo_center' && 'Nhấp vào bản đồ để GHIM VÙNG TRUNG TÂM cho dữ liệu ảo (bán kính 5km)'}
+            {mapClickMode === 'pick_find_destination' && 'Nhấp vào bản đồ để CHỌN ĐIỂM MUỐN ĐẾN — hệ thống sẽ tìm chuyến đi phù hợp'}
           </div>
           <button
             onClick={onCancelClickMode}

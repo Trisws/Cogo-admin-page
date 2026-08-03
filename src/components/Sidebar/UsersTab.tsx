@@ -22,6 +22,7 @@ interface UsersTabProps {
   onBatchGenerateUsers: (count: number) => void;
   onStartCreateTrip: (userId: string, vehicleType: VehicleType) => void;
   onFindTrip: (user: User) => void;
+  onCancelFindTrip: (userId: string) => void;
   mapClickMode: MapClickMode;
   setMapClickMode: (mode: MapClickMode) => void;
   pendingRandomLocation: Location | null;
@@ -37,6 +38,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
   onBatchGenerateUsers,
   onStartCreateTrip,
   onFindTrip,
+  onCancelFindTrip,
   mapClickMode,
   setMapClickMode,
   pendingRandomLocation,
@@ -179,6 +181,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
           <option value="all">Tất cả</option>
           <option value="idle">Rảnh</option>
           <option value="driving">Đang lái</option>
+          <option value="searching">Đang tìm chuyến</option>
           <option value="riding">Đang đi</option>
         </select>
       </div>
@@ -191,6 +194,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
           filteredUsers.map((user) => {
             const isSelected = user.id === selectedUserId;
             const isDriving = user.status === 'driving';
+            const isSearching = user.status === 'searching';
             const isRiding = user.status === 'riding';
             const isDraftOpen = tripDraftUserId === user.id;
 
@@ -225,6 +229,11 @@ export const UsersTab: React.FC<UsersTabProps> = ({
                           <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ring-1 ${
                             isLight ? 'bg-amber-100 text-amber-800 ring-amber-300' : 'bg-amber-500/15 text-amber-300 ring-amber-500/30'
                           }`}>Đang lái</span>
+                        )}
+                        {isSearching && (
+                          <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ring-1 ${
+                            isLight ? 'bg-sky-100 text-sky-800 ring-sky-300' : 'bg-sky-500/15 text-sky-300 ring-sky-500/30'
+                          }`}>Đang tìm chuyến</span>
                         )}
                         {isRiding && (
                           <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ring-1 ${
@@ -294,6 +303,17 @@ export const UsersTab: React.FC<UsersTabProps> = ({
                         </button>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {isSearching && (
+                  <div onClick={(e) => e.stopPropagation()} className="mt-2.5">
+                    <button
+                      onClick={() => onCancelFindTrip(user.id)}
+                      className={`w-full py-1.5 rounded-md font-medium text-xs flex items-center justify-center gap-1.5 cursor-pointer ${outlineBtn}`}
+                    >
+                      <Zap className="w-3.5 h-3.5" /> Hủy tìm chuyến
+                    </button>
                   </div>
                 )}
               </div>

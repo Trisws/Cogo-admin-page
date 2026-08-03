@@ -51,7 +51,7 @@ Hãy tưởng tượng những "khuôn mẫu" dữ liệu này giống như các
   phone: string;      // số điện thoại
   avatar: string;     // link ảnh đại diện (tự sinh từ dịch vụ dicebear.com)
   location: Location; // vị trí hiện tại {lat, lng, address?}
-  status: 'idle' | 'driving' | 'riding'; // Rảnh | Đang lái xe | Đang là khách trên xe
+  status: 'idle' | 'driving' | 'searching' | 'riding'; // Rảnh | Đang lái xe | Đang tìm chuyến (đã chọn điểm đến, đang chờ ghép) | Đã ghép vào 1 chuyến (chờ đón hoặc đã lên xe)
   heading?: number;   // hướng xe đang quay mặt (0–360 độ), chỉ có ý nghĩa khi đang lái
 }
 ```
@@ -68,17 +68,23 @@ Hãy tưởng tượng những "khuôn mẫu" dữ liệu này giống như các
   destination: Location;   // điểm đến do tài xế chọn trên bản đồ
   status: 'in_progress' | 'completed' | 'cancelled';
   routeWaypoints: Location[]; // danh sách các điểm nhỏ nối từ pickup → destination, xe sẽ "nhảy" qua từng điểm này mỗi nhịp mô phỏng
-  routeIndex: number;      // xe đang ở điểm thứ mấy trong routeWaypoints
+  routeIndex: number;      // xe đang ở điểm thứ mấy trong routeWaypoints (số nguyên)
+  stepProgress: number;    // vị trí "thật" của xe trên đường, có phần thập phân — dùng để tính tốc độ cho khớp với etaSeconds (xem mục 3)
   progress: number;        // % hoàn thành chuyến (0–100)
   distanceKm, fareVND, etaSeconds: number; // quãng đường, giá tiền, thời gian dự kiến
 }
 ```
 
-`TripSlot` chỉ là `{ passengerUserId: string | null }` — 1 ô chỗ ngồi, `null` nghĩa là còn trống. Số lượng `slots` phụ thuộc loại xe (xem mục 5).
+`TripSlot` là `{ passengerUserId: string | null; pickupIndex?: number; dropoffIndex?: number; pickedUp?: boolean }` — 1 ô chỗ ngồi:
+- `passengerUserId`: `null` nghĩa là còn trống, có `id` nghĩa là đã có khách ghép vào ô này.
+- `pickupIndex` / `dropoffIndex`: khách này sẽ được đón/trả ở **điểm thứ mấy** trong `routeWaypoints` của tài xế (xem mục "Tìm chuyến đi" ở mục 3).
+- `pickedUp`: `false` = khách đang đứng chờ ở điểm đón (marker vẫn hiện trên bản đồ); `true` = tài xế đã đi ngang qua đón, khách coi như đang ngồi trong xe (marker ẩn đi, xem "Hiệu ứng marker" ở mục 3).
+
+Số lượng `slots` phụ thuộc loại xe (xem mục 5).
 
 ### Các "chế độ bấm bản đồ" — `MapClickMode`
 
-Đây là khái niệm quan trọng nhất để hiểu các luồng tương tác với bản đồ. Bản đồ (`LeafletMap.tsx`) có 1 sự kiện `onClick` DUY NHẤT, nhưng nó cần biết: "bấm vào bản đồ lúc này để LÀM GÌ?" — câu trả lời được lưu trong 1 biến gọi là `mapClickMode`, có 4 giá trị:
+Đây là khái niệm quan trọng nhất để hiểu các luồng tương tác với bản đồ. Bản đồ (`LeafletMap.tsx`) có 1 sự kiện `onClick` DUY NHẤT, nhưng nó cần biết: "bấm vào bản đồ lúc này để LÀM GÌ?" — câu trả lời được lưu trong 1 biến gọi là `mapClickMode`, có 5 giá trị:
 
 | Giá trị | Ý nghĩa | Được bật khi nào |
 |---|---|---|
@@ -86,6 +92,7 @@ Hãy tưởng tượng những "khuôn mẫu" dữ liệu này giống như các
 | `'pick_random_center'` | Bấm 1 điểm để làm **tâm ghim**, sau đó random ra 1 vị trí trong bán kính 5km quanh điểm đó — dùng khi **tạo 1 khách hàng mới** | Bấm nút "Ghim tâm vùng..." trong form Thêm khách hàng |
 | `'pick_trip_destination'` | Bấm 1 điểm để làm **điểm đến chính xác** của 1 chuyến đi sắp tạo | Bấm nút "Chọn điểm đến trên bản đồ" sau khi chọn loại xe |
 | `'pick_demo_center'` | Bấm 1 điểm để làm **tâm vùng sinh dữ liệu ảo hàng loạt** (+5 khách...) | Bấm nút "Ghim vùng trung tâm dữ liệu ảo" trong tab Dữ liệu ảo |
+| `'pick_find_destination'` | Bấm 1 điểm để làm **nơi muốn đến** khi tìm chuyến đi ké (khác `pick_trip_destination` ở chỗ user này không tự lái, điểm đón mặc định là vị trí hiện tại của họ) | Bấm nút "Tìm chuyến đi" trên 1 khách đang `idle` |
 
 Cơ chế chung: bấm nút → `setMapClickMode('xxx')` → bản đồ đổi con trỏ chuột thành dấu `+` và hiện băng thông báo màu xanh ở trên cùng → người dùng click vào bản đồ → `LeafletMap` gọi `onMapClickAction(toạ_độ_vừa_click)` → hàm này nằm trong `App.tsx`, nó kiểm tra `mapClickMode` đang là gì để quyết định làm gì với toạ độ đó → xong việc thì tự đặt lại `mapClickMode = 'none'`.
 
@@ -106,6 +113,8 @@ Danh sách các hộp nhớ chính:
 | `mapClickMode` | Xem mục 2 |
 | `pendingRandomLocation` | Vị trí ngẫu nhiên vừa chọn xong, đang chờ form "Thêm khách hàng" lấy dùng |
 | `tripDraft` | Thông tin tạm `{userId, vehicleType}` khi 1 user đang giữa chừng tạo chuyến đi (đã chọn loại xe, đang chờ click bản đồ chọn điểm đến) |
+| `findTripDraft` | Thông tin tạm `{userId}` khi 1 user đang giữa chừng "Tìm chuyến đi" (đang chờ click bản đồ chọn điểm muốn đến) |
+| `searchRequests` | Danh sách các user đã chọn điểm đến nhưng **chưa ghép được** chuyến nào — được giữ lại để dò lại liên tục (xem mục 3, phần "Tìm chuyến đi") |
 | `demoDataCenter` | Toạ độ tâm vùng sinh dữ liệu ảo hàng loạt (nếu chưa ghim thì `null`) |
 | `isSimulating`, `simSpeed` | Mô phỏng đang chạy hay tạm dừng, và tốc độ (1x/2x/5x/10x) |
 | `currentCity`, `tileLayerType`, `themeMode` | Thành phố đang xem, kiểu bản đồ (OSM/Vệ tinh), giao diện sáng/tối |
@@ -135,27 +144,69 @@ Khi người dùng click vào bản đồ lúc đang ở chế độ này, hàm 
 7. Thêm chuyến mới vào đầu mảng `trips`.
 
 #### Vòng lặp mô phỏng di chuyển (tick loop) — `useEffect(..., [isSimulating, simSpeed, addLog])`
-Đây là đoạn code chạy **lặp đi lặp lại liên tục**, giống 1 cái đồng hồ tích tắc. Cứ mỗi `400 / simSpeed` mili-giây (tốc độ càng cao, tích tắc càng nhanh), nó chạy 1 lần và làm việc sau với **mọi chuyến đi đang `in_progress`**:
+Đây là đoạn code chạy **lặp đi lặp lại liên tục**, giống 1 cái đồng hồ tích tắc. Interval chạy mỗi `400 / simSpeed` mili-giây (tốc độ càng cao, tích tắc càng nhanh — đây gọi là "TICK_MS"). Với **mọi chuyến đi đang `in_progress`**:
 
 ```
 Với mỗi chuyến đi đang chạy:
-  - Lấy điểm tiếp theo trong routeWaypoints (routeIndex + 1)
-  - Nếu còn điểm tiếp theo:
-      → Di chuyển user (tài xế) tới điểm đó, tính lại "heading" (hướng quay đầu xe)
-      → Tính lại % hoàn thành (progress)
-  - Nếu đã hết điểm (đã tới đích):
-      → Đổi user về status 'idle', đặt vị trí user = điểm đến
+  - Tính "mỗi tick xe nên đi được bao nhiêu waypoint" dựa trên TỔNG SỐ waypoint và etaSeconds
+    (route càng dài / eta càng ngắn → mỗi tick nhảy nhiều điểm hơn; route ngắn / eta dài → nhích chậm)
+  - Cộng dồn số đó vào stepProgress (số thập phân), rồi làm tròn xuống ra routeIndex mới
+  - Nếu routeIndex mới CHƯA đổi so với trước (route dài, mỗi tick chưa đủ 1 điểm):
+      → chỉ lưu lại stepProgress, chưa di chuyển gì cả (đây là chỗ tạo cảm giác "chạy chậm")
+  - Nếu routeIndex mới đã tới đích (>= tổng số điểm - 1):
+      → Đổi user (tài xế) về status 'idle', đặt vị trí = điểm đến
+      → Bất kỳ khách nào còn trong slots (kể cả đang chờ đón) cũng được trả về đúng điểm đến, status 'idle'
       → Ghi log "hoàn thành! Thu nhập: ... VND"
-      → Đổi trạng thái chuyến thành 'completed'
+      → Đổi trạng thái chuyến thành 'completed', dọn sạch slots
+  - Ngược lại (còn đường để đi):
+      → Di chuyển user (tài xế) tới waypoint mới, tính lại "heading" (hướng quay đầu xe)
+      → Với từng slot có khách: nếu routeIndex mới đã chạm/đi quá dropoffIndex → TRẢ khách ở đúng điểm đó,
+        dọn trống slot; nếu chưa đón (`pickedUp: false`) mà đã chạm/đi quá pickupIndex → ĐÁNH DẤU pickedUp = true
+        (khách coi như đã lên xe, marker của họ sẽ ẩn đi — xem "Hiệu ứng marker" ngay dưới đây)
+      → Tính lại % hoàn thành (progress)
 ```
+
+> **Vì sao lại có `stepProgress` thay vì chỉ dùng `routeIndex`?** Bản đầu tiên của app cứ mỗi tick lại nhảy đúng 1 waypoint, bất kể route đó dài 10 điểm hay 200 điểm — nghĩa là 1 chuyến 1km và 1 chuyến 10km chạy xong trong cùng 1 khoảng thời gian, rất phi lý. `stepProgress` sửa việc này: số điểm cần nhảy mỗi tick được tính ra từ chính `etaSeconds` của chuyến đó, nên quãng đường càng xa / thời gian dự kiến càng lâu thì xe di chuyển càng... chậm lại đúng như đời thực, thay vì luôn nhanh như nhau.
 
 > **Lưu ý dành cho người mới:** Đoạn code này từng có 1 lỗi (đã sửa) — khi hoàn thành chuyến, code cũ gọi lại 1 hàm riêng để tìm chuyến đi trong danh sách `trips`, nhưng danh sách đó bị "cũ" (stale) do cách JavaScript ghi nhớ biến trong 1 hàm được tạo từ lâu (gọi là *closure*). Bài học: khi bạn đang có sẵn dữ liệu mới nhất ngay trong tay (biến `trip` trong vòng lặp `.map()`), hãy dùng luôn nó, đừng đi tra cứu lại từ 1 biến ở ngoài có thể đã lỗi thời.
 
 #### `handleCancelTrip(tripId)` / `handleForceFinishTrip(tripId)`
-Hai hàm này được gọi khi người dùng bấm nút "Hủy chuyến" / "Hoàn thành ngay" trong tab Chuyến đi — tức là **can thiệp thủ công**, không cần chờ mô phỏng tự chạy tới đích. Cùng logic với vòng lặp tick ở trên nhưng chạy ngay lập tức 1 lần.
+Hai hàm này được gọi khi người dùng bấm nút "Hủy chuyến" / "Hoàn thành ngay" trong tab Chuyến đi — tức là **can thiệp thủ công**, không cần chờ mô phỏng tự chạy tới đích. Cùng logic với vòng lặp tick ở trên nhưng chạy ngay lập tức 1 lần — kể cả khách đang ngồi trong xe cũng được trả về `idle` luôn (không bị "kẹt" trong 1 chuyến đã huỷ/xong).
 
-#### `handleFindTrip(user)` — placeholder
-Hiện tại chỉ ghi 1 dòng log "Tính năng sẽ được thiết kế sau" — chưa có logic thật, vì tính năng "tìm chuyến đi để làm hành khách" chưa được thiết kế xong (cố ý để dành làm sau).
+#### "Tìm chuyến đi" — ghép khách vào chuyến của người khác (đi ké xe)
+
+Đây là tính năng phức tạp nhất app, dành cho user **không tự lái** mà muốn được 1 tài xế khác (đang chạy sẵn) tiện đường chở đi. Gồm 4 phần:
+
+**a) `handleFindTrip(user)`** — bấm nút "Tìm chuyến đi": chỉ ghi nhớ `findTripDraft = {userId}` rồi bật `mapClickMode = 'pick_find_destination'`, giống hệt cách `handleStartCreateTrip` chờ chọn điểm đến vậy — khác ở chỗ điểm này là **nơi user này muốn tới**, không phải điểm đón (điểm đón mặc định = vị trí hiện tại của họ).
+
+**b) `findBestTripMatch(vị_trí_khách, điểm_muốn_đến, trips)`** — hàm "thuần" (không đụng state), là bộ não so khớp:
+```
+Với mỗi chuyến đang in_progress mà còn ghế trống:
+  - Duyệt các waypoint TỪ VỊ TRÍ HIỆN TẠI của tài xế (routeIndex) trở đi,
+    tìm điểm nào gần vị trí khách nhất → nếu gần nhất cũng > 500m thì bỏ qua chuyến này
+  - Duyệt tiếp các waypoint SAU điểm đón đó, tìm điểm nào gần điểm khách muốn đến nhất
+    → nếu > 500m thì cũng bỏ qua (chuyến này không đi ngang qua đích của khách)
+  - Nếu cả 2 đều đủ gần: đây là 1 ứng viên hợp lệ, "điểm số" = tổng 2 khoảng cách
+Trả về ứng viên có điểm số thấp nhất (gần nhất) trong tất cả chuyến hợp lệ, hoặc null nếu không có chuyến nào.
+```
+500m (`NEARBY_THRESHOLD_KM`) là ngưỡng "coi như đi ngang qua" — chỉnh hằng số này nếu muốn dễ/khó ghép hơn.
+
+**c) Ghép "thật" — không chỉ đi ngang qua mà xe phải GHÉ ĐÚNG chỗ khách** (`insertRouteWaypoint`, `spliceRiderIntoTrip`): tìm được ứng viên xong, app không chỉ ghi nhớ "gần điểm thứ mấy" — nó **chèn thẳng toạ độ chính xác của khách** (điểm đón) và **toạ độ khách muốn tới** (điểm trả) vào ngay giữa mảng `routeWaypoints` của tài xế, ngay sau các waypoint gần nhất đã tìm ở bước (b). Vì chèn thêm 2 điểm mới vào giữa mảng, mọi `pickupIndex`/`dropoffIndex` của các khách KHÁC đã có sẵn trên xe (nếu xe 4-7 chỗ chở nhiều khách) mà đứng sau vị trí chèn đều phải **dịch lên +1, +2** cho đúng — đây là việc `insertRouteWaypoint` lo. Kết quả: đường vẽ trên bản đồ giờ có 1 đoạn rẽ thật sự ghé vào đúng nhà khách rồi mới đi tiếp, thay vì xe chỉ tình cờ lướt qua gần đó.
+
+**d) 2 nơi gọi tới việc ghép:**
+- `handleRequestTrip(userId, destination)` — chạy ngay khi vừa chọn xong điểm đến: thử ghép luôn bằng `findBestTripMatch`. Ghép được thì gọi `spliceRiderIntoTrip` luôn, đổi user thành `status: 'riding'`. Ghép **không được** thì đẩy user vào `searchRequests`, đổi status thành `'searching'` — tức là "để đó, chờ tiếp".
+- Một `useEffect` khác, chạy mỗi khi `trips` đổi (nghĩa là gần như mỗi tick, hoặc mỗi khi có chuyến mới được tạo): duyệt lại **toàn bộ** `searchRequests` còn tồn đọng, thử ghép lại từng người 1 lần nữa bằng đúng `findBestTripMatch`. Đây là lý do khách "Đang tìm chuyến" không cần bấm lại nút gì — chỉ cần ngồi yên, hễ có 1 chuyến mới xuất hiện hoặc chuyến cũ chạy tới gần là tự động được ghép ngay.
+
+Có thể huỷ tìm bất cứ lúc nào bằng nút "Hủy tìm chuyến" → `handleCancelSearchTrip` — chỉ đơn giản gỡ user đó khỏi `searchRequests` và trả `status` về `'idle'`.
+
+#### Hiệu ứng marker — `LeafletMap.tsx` "kể chuyện" bằng hình ảnh
+
+`LeafletMap.tsx` không tự quyết định gì cả — nó chỉ đọc `users`/`trips` mỗi khi đổi và vẽ lại marker cho đúng trạng thái hiện tại. Vài quy tắc vẽ đáng chú ý (tất cả chỉ là CSS/HTML gắn kèm marker, không ảnh hưởng tới dữ liệu):
+
+- **User đang `searching`**: marker có 1 vòng tròn tím nhấp nháy (CSS `animate-ping`) bao quanh — để nhận ra ngay ai đang chờ ghép chuyến.
+- **User đang `riding` (đã ghép, đang chờ đón)**: marker có vòng nhấp nháy nhẹ màu xanh lá + tooltip đổi thành "Đang chờ xe đón".
+- **User đang `riding` mà `pickedUp = true`** (đã lên xe): marker bị **ẩn hoàn toàn** khỏi bản đồ — tính bằng cách gom mọi `passengerUserId` có `pickedUp: true` trong tất cả `trips` đang chạy thành 1 danh sách "đang ngồi trong xe, khỏi vẽ".
+- **Mỗi chuyến đang chạy**: ngoài đường line chính (pickup → destination), nếu chuyến đó có khách nào **đã ghép nhưng chưa đón** (`pickedUp: false`), sẽ có thêm **1 đường nét đứt mỏng màu tím** nối từ vị trí khách đó tới vị trí hiện tại của tài xế — cho biết trực quan "khách này đang chờ xe nào, xe đó đang ở đâu rồi".
 
 ---
 
@@ -187,7 +238,17 @@ App khởi động **hoàn toàn trống**: `users = []`, `trips = []`. Không c
 6. Giao diện tự vẽ lại: card user giờ có nhãn "Đang lái", tab "Chuyến đi" hiện 1 card mới với thanh tiến độ 0%, bản đồ vẽ 2 lá cờ A (điểm đón) / B (điểm đến) và 1 đường kẻ nối chúng, marker của user đổi từ 👤 thành icon xe (🛵/🚗/🚘) tuỳ loại xe.
 
 ### Bước 4 — Mô phỏng tự chạy
-Vòng lặp tick (mục 3) tự động chạy mỗi `400/simSpeed` mili-giây, đẩy marker xe nhích dần theo đường đã vẽ, thanh tiến độ tăng dần. Khi chạy hết đường, chuyến chuyển `completed`, user quay lại `idle`, và số liệu "Lịch sử hoàn thành" trong tab Chuyến đi tăng lên.
+Vòng lặp tick (mục 3) tự động chạy mỗi `400/simSpeed` mili-giây, đẩy marker xe nhích dần theo đường đã vẽ (tốc độ nhích nhanh/chậm tuỳ `etaSeconds` của chuyến, xem mục 3), thanh tiến độ tăng dần. Khi chạy hết đường, chuyến chuyển `completed`, user quay lại `idle`, và số liệu "Lịch sử hoàn thành" trong tab Chuyến đi tăng lên.
+
+### Bước 4b — 1 khách khác muốn "đi ké" (Tìm chuyến đi)
+1. Trên 1 card khách đang `idle`, bấm "Tìm chuyến đi" → `handleFindTrip` bật `mapClickMode = 'pick_find_destination'`.
+2. Bản đồ hiện băng xanh "Nhấp vào bản đồ để CHỌN ĐIỂM MUỐN ĐẾN".
+3. Click vào nơi muốn tới → `handleMapClickAction` gọi `handleRequestTrip(userId, điểm_đã_click)`.
+4. `handleRequestTrip` thử ghép ngay bằng `findBestTripMatch` (xem mục 3):
+   - **Ghép được**: `spliceRiderIntoTrip` chèn đúng vị trí khách + đúng điểm họ muốn đến vào route của tài xế đó, user chuyển `status: 'riding'`, marker vẫn hiện (đang chờ xe tới đón).
+   - **Chưa ghép được**: user vào hàng chờ `searchRequests`, chuyển `status: 'searching'` — marker có vòng tròn tím nhấp nháy trên bản đồ (xem "Hiệu ứng marker" ngay dưới đây) để dễ nhận ra. Không cần làm gì thêm — hễ có chuyến mới tạo hoặc chuyến cũ chạy gần tới là được tự động ghép (xem `useEffect` dò liên tục ở mục 3).
+5. Khi tài xế của chuyến đã ghép đi tới đúng điểm đón (`routeIndex` chạm `pickupIndex`): khách được đánh dấu `pickedUp = true`, marker của khách **ẩn đi** (coi như đang ngồi trong xe).
+6. Khi tài xế đi tới đúng điểm khách muốn xuống (`dropoffIndex`): khách được trả về `status: 'idle'` tại đúng điểm đó, marker hiện lại.
 
 ### Bước 5 — Xoá dữ liệu
 Bấm nút đỏ "Xóa toàn bộ dữ liệu mô phỏng" → xuất hiện bước xác nhận **ngay trong giao diện** (không dùng popup của trình duyệt, vì popup đó có thể bị 1 số trình duyệt chặn âm thầm) → bấm "Xác nhận xóa" → `handleClearAllData` chạy, đưa mọi hộp nhớ về rỗng/`null`.
@@ -300,4 +361,5 @@ server/
 | Hủy / hoàn thành thủ công | Nút trong card chuyến đi | `handleCancelTrip` / `handleForceFinishTrip` | Đổi trạng thái chuyến + user ngay lập tức |
 | Xoá toàn bộ | "Xóa toàn bộ dữ liệu mô phỏng" → xác nhận | `handleClearAllData` | `users`, `trips` về rỗng |
 | Tìm vị trí trên bản đồ | Gõ vào ô "Tìm vị trí" ở Header | `geocodeAddress` (gọi Nominatim) | Bản đồ pan tới địa điểm, không đụng dữ liệu |
-| Tìm chuyến đi | "Tìm chuyến đi" | `handleFindTrip` (placeholder) | Chỉ ghi log, chưa có logic thật |
+| Tìm chuyến đi (đi ké) | "Tìm chuyến đi" → chọn điểm đến trên bản đồ | `handleFindTrip` rồi `handleRequestTrip` | Ghép được ngay thì `status: riding` + route tài xế được chèn thêm điểm đón/trả; chưa ghép được thì `status: searching`, vào hàng chờ `searchRequests`, tự ghép sau |
+| Hủy tìm chuyến | "Hủy tìm chuyến" (khi đang `searching`) | `handleCancelSearchTrip` | Gỡ khỏi `searchRequests`, `status` về `idle` |

@@ -216,12 +216,22 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
       if (isSearching) badgeBg = 'bg-violet-500';
       if (isRiding) badgeBg = 'bg-emerald-500';
 
+      // Searching users get a pulsing ring so it's obvious at a glance who's
+      // actively looking for a ride. Waiting passengers (matched but not yet
+      // picked up) get a slower pulse in the trip's own accent color instead.
+      const pulseRing = isSearching
+        ? `<span class="absolute inset-0 rounded-full bg-violet-400 opacity-75 animate-ping"></span>`
+        : isRiding
+        ? `<span class="absolute inset-0 rounded-full bg-emerald-400 opacity-60 animate-pulse"></span>`
+        : '';
+
       const iconHtml = `
         <div class="relative group cursor-pointer">
           <div class="${isDriving ? 'w-10 h-10' : 'w-9 h-9'} rounded-full ${isLight ? 'bg-sky-50 border-sky-300' : 'bg-sky-950/90 border-sky-600'} border-2 ${
             isSelected ? (isLight ? 'border-sky-500 scale-125 z-30 shadow-lg shadow-sky-500/30' : 'border-sky-400 scale-125 z-30 shadow-lg shadow-sky-500/50') : 'shadow-md'
           } flex items-center justify-center transition-all duration-200">
-            <span class="${isDriving ? 'text-lg' : 'text-base'} transform transition-transform" style="transform: rotate(${isDriving ? (user.heading ?? 0) : 0}deg)">
+            ${pulseRing}
+            <span class="relative ${isDriving ? 'text-lg' : 'text-base'} transform transition-transform" style="transform: rotate(${isDriving ? (user.heading ?? 0) : 0}deg)">
               ${isDriving && vConfig ? vConfig.icon : '👤'}
             </span>
             <span class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full ${badgeBg} border-2 ${isLight ? 'border-white' : 'border-slate-900'}"></span>
@@ -230,7 +240,7 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
           <div class="absolute -top-7 left-1/2 transform -translate-x-1/2 ${isLight ? 'bg-sky-50 text-sky-900 border-sky-200' : 'bg-sky-950/95 text-sky-100 border-sky-700'} text-[10px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap shadow-md pointer-events-none ${
             isSelected ? 'block z-40' : 'hidden group-hover:block'
           }">
-            ${user.name} ${isDriving ? '• Đang lái' : ''}${isSearching ? '• Đang tìm chuyến' : ''}
+            ${user.name} ${isDriving ? '• Đang lái' : ''}${isSearching ? '• Đang tìm chuyến' : ''}${isRiding ? '• Đang chờ xe đón' : ''}
           </div>
         </div>
       `;
@@ -316,8 +326,32 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
           dashArray: '8, 8',
         }).addTo(group);
       }
+
+      // Connect every matched-but-not-yet-picked-up passenger to this trip's
+      // driver with a thin dashed line, so it's clear who's waiting for whom.
+      const driver = users.find((u) => u.id === trip.driverUserId);
+      if (driver) {
+        trip.slots.forEach((slot) => {
+          if (!slot.passengerUserId || slot.pickedUp) return;
+          const passenger = users.find((u) => u.id === slot.passengerUserId);
+          if (!passenger) return;
+
+          L.polyline(
+            [
+              [passenger.location.lat, passenger.location.lng],
+              [driver.location.lat, driver.location.lng],
+            ],
+            {
+              color: '#8b5cf6',
+              weight: 2,
+              opacity: 0.7,
+              dashArray: '3, 7',
+            }
+          ).addTo(group);
+        });
+      }
     });
-  }, [trips, selectedTripId]);
+  }, [trips, users, selectedTripId]);
 
   return (
     <div className={`relative w-full h-full min-h-[400px] flex-1 overflow-hidden ${isLight ? 'bg-slate-100' : 'bg-slate-950'}`}>

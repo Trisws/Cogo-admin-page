@@ -50,6 +50,9 @@ const HELP_TEXT = COMMAND_LIST.map((c) => `${c.usage.padEnd(30)} - ${c.desc}`).j
 // How close (km) a route waypoint must be to a point to count as "passing by" it
 const NEARBY_THRESHOLD_KM = 0.5;
 
+// Radius (km) used to auto-pick a random destination instead of a map click
+const AUTO_DESTINATION_RADIUS_KM = 3;
+
 interface TripMatch {
   tripId: string;
   slotIndex: number;
@@ -367,6 +370,23 @@ export default function App() {
     setFindTripDraft({ userId: user.id });
     setMapClickMode('pick_find_destination');
     addLog('Đang chọn điểm muốn đến để tìm chuyến đi phù hợp... (Nhấp trên bản đồ)', 'info', 'system');
+  };
+
+  // Auto-picks a random destination near the user instead of waiting for a map click
+  const randomNearbyDestination = (center: Location): Location => {
+    const loc = generateRandomLocation(center, AUTO_DESTINATION_RADIUS_KM);
+    return { ...loc, address: getApproximateAddress(loc) };
+  };
+
+  const handleCreateTripAuto = (userId: string, vehicleType: VehicleType) => {
+    const user = users.find((u) => u.id === userId);
+    if (!user || user.status !== 'idle') return;
+    handleCreateTrip(userId, vehicleType, randomNearbyDestination(user.location));
+  };
+
+  const handleFindTripAuto = (user: User) => {
+    if (user.status !== 'idle') return;
+    handleRequestTrip(user.id, randomNearbyDestination(user.location));
   };
 
   // Tries to match a user to an in-progress trip right away; if nothing
@@ -746,7 +766,9 @@ export default function App() {
           onDeleteUser={handleDeleteUser}
           onBatchGenerateUsers={handleBatchGenerateUsers}
           onStartCreateTrip={handleStartCreateTrip}
+          onCreateTripAuto={handleCreateTripAuto}
           onFindTrip={handleFindTrip}
+          onFindTripAuto={handleFindTripAuto}
           onCancelFindTrip={handleCancelSearchTrip}
           onClearAllData={handleClearAllData}
           onCancelTrip={handleCancelTrip}

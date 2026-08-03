@@ -20,7 +20,9 @@ interface SidebarProps {
   onDeleteUser: (userId: string) => void;
   onBatchGenerateUsers: (count: number) => void;
   onStartCreateTrip: (userId: string, vehicleType: VehicleType) => void;
+  onCreateTripAuto: (userId: string, vehicleType: VehicleType) => void;
   onFindTrip: (user: User) => void;
+  onFindTripAuto: (user: User) => void;
   onCancelFindTrip: (userId: string) => void;
   onClearAllData?: () => void;
   onCancelTrip: (tripId: string) => void;
@@ -70,7 +72,9 @@ export const Sidebar: React.FC<SidebarProps> = (props) => {
                 onAddUser={props.onAddUser}
                 onBatchGenerateUsers={props.onBatchGenerateUsers}
                 onStartCreateTrip={props.onStartCreateTrip}
+                onCreateTripAuto={props.onCreateTripAuto}
                 onFindTrip={props.onFindTrip}
+                onFindTripAuto={props.onFindTripAuto}
                 onCancelFindTrip={props.onCancelFindTrip}
                 mapClickMode={props.mapClickMode}
                 setMapClickMode={props.setMapClickMode}

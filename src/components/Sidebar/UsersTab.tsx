@@ -10,7 +10,8 @@ import {
   Plus,
   Sparkles,
   MapPin,
-  Car
+  Car,
+  Shuffle
 } from 'lucide-react';
 
 interface UsersTabProps {
@@ -21,7 +22,9 @@ interface UsersTabProps {
   onAddUser: (user: { name: string; phone: string; location: Location }) => void;
   onBatchGenerateUsers: (count: number) => void;
   onStartCreateTrip: (userId: string, vehicleType: VehicleType) => void;
+  onCreateTripAuto: (userId: string, vehicleType: VehicleType) => void;
   onFindTrip: (user: User) => void;
+  onFindTripAuto: (user: User) => void;
   onCancelFindTrip: (userId: string) => void;
   mapClickMode: MapClickMode;
   setMapClickMode: (mode: MapClickMode) => void;
@@ -37,7 +40,9 @@ export const UsersTab: React.FC<UsersTabProps> = ({
   onAddUser,
   onBatchGenerateUsers,
   onStartCreateTrip,
+  onCreateTripAuto,
   onFindTrip,
+  onFindTripAuto,
   onCancelFindTrip,
   mapClickMode,
   setMapClickMode,
@@ -54,6 +59,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
 
   const [tripDraftUserId, setTripDraftUserId] = useState<string | null>(null);
   const [tripVehicleType, setTripVehicleType] = useState<VehicleType>('motorbike');
+  const [findDraftUserId, setFindDraftUserId] = useState<string | null>(null);
 
   // Pick up the random location chosen via the map pin-drop, if the form is the one waiting for it
   useEffect(() => {
@@ -97,6 +103,25 @@ export const UsersTab: React.FC<UsersTabProps> = ({
   const handlePickTripDestination = (userId: string) => {
     onStartCreateTrip(userId, tripVehicleType);
     setTripDraftUserId(null);
+  };
+
+  const handleCreateTripAutoClick = (userId: string) => {
+    onCreateTripAuto(userId, tripVehicleType);
+    setTripDraftUserId(null);
+  };
+
+  const handleOpenFindDraft = (userId: string) => {
+    setFindDraftUserId((prev) => (prev === userId ? null : userId));
+  };
+
+  const handleFindTripAutoClick = (user: User) => {
+    onFindTripAuto(user);
+    setFindDraftUserId(null);
+  };
+
+  const handleFindTripMapClick = (user: User) => {
+    onFindTrip(user);
+    setFindDraftUserId(null);
   };
 
   return (
@@ -197,6 +222,7 @@ export const UsersTab: React.FC<UsersTabProps> = ({
             const isSearching = user.status === 'searching';
             const isRiding = user.status === 'riding';
             const isDraftOpen = tripDraftUserId === user.id;
+            const isFindDraftOpen = findDraftUserId === user.id;
 
             return (
               <div
@@ -275,8 +301,10 @@ export const UsersTab: React.FC<UsersTabProps> = ({
                         <Car className="w-3.5 h-3.5" /> Tạo chuyến đi
                       </button>
                       <button
-                        onClick={() => onFindTrip(user)}
-                        className={`py-1.5 rounded-md font-medium text-xs flex items-center justify-center gap-1.5 cursor-pointer ${outlineBtn}`}
+                        onClick={() => handleOpenFindDraft(user.id)}
+                        className={`py-1.5 rounded-md font-medium text-xs flex items-center justify-center gap-1.5 cursor-pointer ${
+                          isFindDraftOpen ? 'bg-emerald-100 text-emerald-800 ring-1 ring-emerald-300' : outlineBtn
+                        }`}
                       >
                         <Zap className="w-3.5 h-3.5" /> Tìm chuyến đi
                       </button>
@@ -293,13 +321,40 @@ export const UsersTab: React.FC<UsersTabProps> = ({
                             <option key={key} value={key}>{config.icon} {config.name}</option>
                           ))}
                         </select>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            onClick={() => handlePickTripDestination(user.id)}
+                            className={`py-1.5 rounded-md font-medium text-xs flex items-center justify-center gap-1.5 cursor-pointer ${
+                              isLight ? 'bg-zinc-900 text-white hover:bg-zinc-700' : 'bg-zinc-100 text-zinc-900 hover:bg-white'
+                            }`}
+                          >
+                            <MapPin className="w-3.5 h-3.5" /> Trên bản đồ
+                          </button>
+                          <button
+                            onClick={() => handleCreateTripAutoClick(user.id)}
+                            className={`py-1.5 rounded-md font-medium text-xs flex items-center justify-center gap-1.5 cursor-pointer ${outlineBtn}`}
+                          >
+                            <Shuffle className="w-3.5 h-3.5" /> Ngẫu nhiên
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {isFindDraftOpen && (
+                      <div className={`mt-2 p-2 rounded-md border grid grid-cols-2 gap-2 ${border} ${isLight ? 'bg-zinc-50' : 'bg-zinc-950'}`}>
                         <button
-                          onClick={() => handlePickTripDestination(user.id)}
+                          onClick={() => handleFindTripMapClick(user)}
                           className={`py-1.5 rounded-md font-medium text-xs flex items-center justify-center gap-1.5 cursor-pointer ${
                             isLight ? 'bg-zinc-900 text-white hover:bg-zinc-700' : 'bg-zinc-100 text-zinc-900 hover:bg-white'
                           }`}
                         >
-                          <MapPin className="w-3.5 h-3.5" /> Chọn điểm đến trên bản đồ
+                          <MapPin className="w-3.5 h-3.5" /> Trên bản đồ
+                        </button>
+                        <button
+                          onClick={() => handleFindTripAutoClick(user)}
+                          className={`py-1.5 rounded-md font-medium text-xs flex items-center justify-center gap-1.5 cursor-pointer ${outlineBtn}`}
+                        >
+                          <Shuffle className="w-3.5 h-3.5" /> Ngẫu nhiên
                         </button>
                       </div>
                     )}

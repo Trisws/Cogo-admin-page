@@ -95,6 +95,42 @@ function findBestTripMatch(searcherLocation: Location, destination: Location, tr
   return best;
 }
 
+// Inserts `point` right after routeWaypoints[afterIndex], shifting every
+// other slot's pickup/dropoff index that falls at or after the insertion
+// point so they still point at the same waypoint as before.
+function insertRouteWaypoint(trip: Trip, afterIndex: number, point: Location): Trip {
+  const insertAt = afterIndex + 1;
+  const routeWaypoints = trip.routeWaypoints.slice();
+  routeWaypoints.splice(insertAt, 0, point);
+
+  const slots = trip.slots.map((s) => ({
+    ...s,
+    pickupIndex: s.pickupIndex !== undefined && s.pickupIndex >= insertAt ? s.pickupIndex + 1 : s.pickupIndex,
+    dropoffIndex: s.dropoffIndex !== undefined && s.dropoffIndex >= insertAt ? s.dropoffIndex + 1 : s.dropoffIndex,
+  }));
+
+  return { ...trip, routeWaypoints, slots };
+}
+
+// Turns a match into an actual detour: splices the passenger's exact pickup
+// and drop-off spots into the driver's route (instead of just noting nearby
+// waypoints), so the car visibly swings off its path to fetch and drop them.
+function spliceRiderIntoTrip(trip: Trip, match: TripMatch, userId: string, pickupLoc: Location, dropoffLoc: Location): Trip {
+  let working = insertRouteWaypoint(trip, match.pickupIndex, pickupLoc);
+  const pickupIndex = match.pickupIndex + 1;
+
+  const dropoffAfter = match.dropoffIndex + 1; // shifted by the pickup insertion above
+  working = insertRouteWaypoint(working, dropoffAfter, dropoffLoc);
+  const dropoffIndex = dropoffAfter + 1;
+
+  return {
+    ...working,
+    slots: working.slots.map((s, i) =>
+      i === match.slotIndex ? { passengerUserId: userId, pickupIndex, dropoffIndex, pickedUp: false } : s
+    ),
+  };
+}
+
 interface SearchRequest {
   userId: string;
   userName: string;
@@ -344,20 +380,9 @@ export default function App() {
     const match = findBestTripMatch(user.location, destination, trips);
 
     if (match) {
-      const { tripId, slotIndex, pickupIndex, dropoffIndex } = match;
-      const matchedTrip = trips.find((t) => t.id === tripId)!;
-      setTrips((prev) =>
-        prev.map((t) =>
-          t.id === tripId
-            ? {
-                ...t,
-                slots: t.slots.map((s, i) =>
-                  i === slotIndex ? { passengerUserId: userId, pickupIndex, dropoffIndex, pickedUp: false } : s
-                ),
-              }
-            : t
-        )
-      );
+      const matchedTrip = trips.find((t) => t.id === match.tripId)!;
+      const splicedTrip = spliceRiderIntoTrip(matchedTrip, match, userId, user.location, destination);
+      setTrips((prev) => prev.map((t) => (t.id === match.tripId ? splicedTrip : t)));
       setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, status: 'riding' } : u)));
       addLog(`${user.name} đã ghép vào chuyến của ${matchedTrip.driverName} — đang chờ xe tới đón`, 'success', 'trip');
       return;
@@ -393,16 +418,12 @@ export default function App() {
             stillPending.push(req);
             return;
           }
-          const trip = tripsCopy.find((t) => t.id === match.tripId)!;
-          trip.slots[match.slotIndex] = {
-            passengerUserId: req.userId,
-            pickupIndex: match.pickupIndex,
-            dropoffIndex: match.dropoffIndex,
-            pickedUp: false,
-          };
+          const tripIndex = tripsCopy.findIndex((t) => t.id === match.tripId);
+          const splicedTrip = spliceRiderIntoTrip(tripsCopy[tripIndex], match, req.userId, req.location, req.destination);
+          tripsCopy[tripIndex] = splicedTrip;
           matchedUserIds.push(req.userId);
           anyMatched = true;
-          addLog(`${req.userName} đã ghép vào chuyến của ${trip.driverName} — đang chờ xe tới đón`, 'success', 'trip');
+          addLog(`${req.userName} đã ghép vào chuyến của ${splicedTrip.driverName} — đang chờ xe tới đón`, 'success', 'trip');
         });
 
         return anyMatched ? tripsCopy : prevTrips;
